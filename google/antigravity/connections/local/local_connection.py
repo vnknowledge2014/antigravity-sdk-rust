@@ -264,6 +264,29 @@ def callable_to_tool_proto(
   )
 
 
+def _parse_usage_metadata(
+    usage_metadata: localharness_pb2.UsageMetadata,
+) -> types.UsageMetadata:
+  """Extracts UsageMetadata from proto message."""
+  return types.UsageMetadata(
+      prompt_token_count=usage_metadata.prompt_token_count
+      if usage_metadata.HasField("prompt_token_count")
+      else None,
+      cached_content_token_count=usage_metadata.cached_content_token_count
+      if usage_metadata.HasField("cached_content_token_count")
+      else None,
+      candidates_token_count=usage_metadata.candidates_token_count
+      if usage_metadata.HasField("candidates_token_count")
+      else None,
+      thoughts_token_count=usage_metadata.thoughts_token_count
+      if usage_metadata.HasField("thoughts_token_count")
+      else None,
+      total_token_count=usage_metadata.total_token_count
+      if usage_metadata.HasField("total_token_count")
+      else None,
+  )
+
+
 class LocalConnection(connection.Connection):
   """Connection to the Go-based local harness."""
 
@@ -563,7 +586,17 @@ class LocalConnection(connection.Connection):
           step_dict = json_format.MessageToDict(
               event.step_update, preserving_proto_field_name=True
           )
-          step_obj = LocalConnectionStep.from_dict(step_dict)
+          parsed_step = LocalConnectionStep.from_dict(step_dict)
+          if event.HasField("usage_metadata"):
+            step_obj = parsed_step.model_copy(
+                update={
+                    "usage_metadata": _parse_usage_metadata(
+                        event.usage_metadata
+                    )
+                }
+            )
+          else:
+            step_obj = parsed_step
           await self._step_queue.put(step_obj)
 
           # Record the cascade_id for use by TrajectoryStateUpdate
