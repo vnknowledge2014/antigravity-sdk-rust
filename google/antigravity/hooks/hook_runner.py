@@ -38,15 +38,15 @@ class HookRunner:
       on_interaction_hooks: list[hooks_base.OnInteractionHook] | None = None,
       on_compaction_hooks: list[hooks_base.OnCompactionHook] | None = None,
   ):
-    self.on_session_start_hooks = on_session_start_hooks or []
-    self.on_session_end_hooks = on_session_end_hooks or []
-    self.pre_turn_hooks = pre_turn_hooks or []
-    self.post_turn_hooks = post_turn_hooks or []
-    self.pre_tool_call_decide_hooks = pre_tool_call_decide_hooks or []
-    self.post_tool_call_hooks = post_tool_call_hooks or []
-    self.on_tool_error_hooks = on_tool_error_hooks or []
-    self.on_interaction_hooks = on_interaction_hooks or []
-    self.on_compaction_hooks = on_compaction_hooks or []
+    self._on_session_start_hooks = on_session_start_hooks or []
+    self._on_session_end_hooks = on_session_end_hooks or []
+    self._pre_turn_hooks = pre_turn_hooks or []
+    self._post_turn_hooks = post_turn_hooks or []
+    self._pre_tool_call_decide_hooks = pre_tool_call_decide_hooks or []
+    self._post_tool_call_hooks = post_tool_call_hooks or []
+    self._on_tool_error_hooks = on_tool_error_hooks or []
+    self._on_interaction_hooks = on_interaction_hooks or []
+    self._on_compaction_hooks = on_compaction_hooks or []
 
     self.session_context = hooks_base.SessionContext()
 
@@ -54,49 +54,87 @@ class HookRunner:
   def has_hooks(self) -> bool:
     """Returns True if any hooks are registered."""
     return any([
-        self.on_session_start_hooks,
-        self.on_session_end_hooks,
-        self.pre_turn_hooks,
-        self.post_turn_hooks,
-        self.pre_tool_call_decide_hooks,
-        self.post_tool_call_hooks,
-        self.on_tool_error_hooks,
-        self.on_interaction_hooks,
-        self.on_compaction_hooks,
+        self._on_session_start_hooks,
+        self._on_session_end_hooks,
+        self._pre_turn_hooks,
+        self._post_turn_hooks,
+        self._pre_tool_call_decide_hooks,
+        self._post_tool_call_hooks,
+        self._on_tool_error_hooks,
+        self._on_interaction_hooks,
+        self._on_compaction_hooks,
     ])
+
+  @property
+  def on_session_start_hooks(self) -> tuple[hooks_base.OnSessionStartHook, ...]:
+    return tuple(self._on_session_start_hooks)
+
+  @property
+  def on_session_end_hooks(self) -> tuple[hooks_base.OnSessionEndHook, ...]:
+    return tuple(self._on_session_end_hooks)
+
+  @property
+  def pre_turn_hooks(self) -> tuple[hooks_base.PreTurnHook, ...]:
+    return tuple(self._pre_turn_hooks)
+
+  @property
+  def post_turn_hooks(self) -> tuple[hooks_base.PostTurnHook, ...]:
+    return tuple(self._post_turn_hooks)
+
+  @property
+  def pre_tool_call_decide_hooks(
+      self,
+  ) -> tuple[hooks_base.PreToolCallDecideHook, ...]:
+    return tuple(self._pre_tool_call_decide_hooks)
+
+  @property
+  def post_tool_call_hooks(self) -> tuple[hooks_base.PostToolCallHook, ...]:
+    return tuple(self._post_tool_call_hooks)
+
+  @property
+  def on_tool_error_hooks(self) -> tuple[hooks_base.OnToolErrorHook, ...]:
+    return tuple(self._on_tool_error_hooks)
+
+  @property
+  def on_interaction_hooks(self) -> tuple[hooks_base.OnInteractionHook, ...]:
+    return tuple(self._on_interaction_hooks)
+
+  @property
+  def on_compaction_hooks(self) -> tuple[hooks_base.OnCompactionHook, ...]:
+    return tuple(self._on_compaction_hooks)
 
   def register_hook(self, hook: Any):
     """Registers a hook by inferring its type."""
     if isinstance(hook, hooks_base.OnSessionStartHook):
-      self.on_session_start_hooks.append(hook)
+      self._on_session_start_hooks.append(hook)
     elif isinstance(hook, hooks_base.OnSessionEndHook):
-      self.on_session_end_hooks.append(hook)
+      self._on_session_end_hooks.append(hook)
     elif isinstance(hook, hooks_base.PreTurnHook):
-      self.pre_turn_hooks.append(hook)
+      self._pre_turn_hooks.append(hook)
     elif isinstance(hook, hooks_base.PostTurnHook):
-      self.post_turn_hooks.append(hook)
+      self._post_turn_hooks.append(hook)
     elif isinstance(hook, hooks_base.PreToolCallDecideHook):
-      self.pre_tool_call_decide_hooks.append(hook)
+      self._pre_tool_call_decide_hooks.append(hook)
     elif isinstance(hook, hooks_base.PostToolCallHook):
-      self.post_tool_call_hooks.append(hook)
+      self._post_tool_call_hooks.append(hook)
     elif isinstance(hook, hooks_base.OnToolErrorHook):
-      self.on_tool_error_hooks.append(hook)
+      self._on_tool_error_hooks.append(hook)
     elif isinstance(hook, hooks_base.OnInteractionHook):
-      self.on_interaction_hooks.append(hook)
+      self._on_interaction_hooks.append(hook)
     elif isinstance(hook, hooks_base.OnCompactionHook):
-      self.on_compaction_hooks.append(hook)
+      self._on_compaction_hooks.append(hook)
     else:
       raise ValueError(f"Unknown hook type: {type(hook)}")
 
   # Session
   async def dispatch_session_start(self) -> None:
     """Dispatches session start events."""
-    for hook in self.on_session_start_hooks:
+    for hook in self._on_session_start_hooks:
       await hook.run(context=self.session_context, data=None)
 
   async def dispatch_session_end(self) -> None:
     """Dispatches session end events."""
-    for hook in self.on_session_end_hooks:
+    for hook in self._on_session_end_hooks:
       await hook.run(context=self.session_context, data=None)
 
   # Turn
@@ -105,7 +143,7 @@ class HookRunner:
   ) -> tuple[hooks_base.HookResult, hooks_base.TurnContext]:
     """Dispatches pre-turn events."""
     turn_context = hooks_base.TurnContext(self.session_context)
-    for hook in self.pre_turn_hooks:
+    for hook in self._pre_turn_hooks:
       res = await hook.run(context=turn_context, data=prompt)
       if not res.allow:
         return res, turn_context
@@ -115,7 +153,7 @@ class HookRunner:
       self, turn_context: hooks_base.TurnContext, response: str
   ) -> None:
     """Dispatches post-turn events."""
-    for hook in self.post_turn_hooks:
+    for hook in self._post_turn_hooks:
       await hook.run(context=turn_context, data=response)
 
   # Tool
@@ -137,7 +175,7 @@ class HookRunner:
     """
     op_context = hooks_base.OperationContext(turn_context)
 
-    for hook in self.pre_tool_call_decide_hooks:
+    for hook in self._pre_tool_call_decide_hooks:
       res = await hook.run(context=op_context, data=tool_call)
       if not res.allow:
         return res, tool_call, op_context
@@ -148,14 +186,14 @@ class HookRunner:
       self, op_context: hooks_base.OperationContext, result: Any
   ) -> None:
     """Dispatches post-tool call events (Inspect)."""
-    for hook in self.post_tool_call_hooks:
+    for hook in self._post_tool_call_hooks:
       await hook.run(context=op_context, data=result)
 
   async def dispatch_on_tool_error(
       self, op_context: hooks_base.OperationContext, error: Exception
   ) -> tuple[hooks_base.HookResult, Any]:
     """Dispatches tool error events (Transform for recovery)."""
-    for hook in self.on_tool_error_hooks:
+    for hook in self._on_tool_error_hooks:
       try:
         res = await hook.run(context=op_context, data=error)
         if res is not None:
@@ -176,7 +214,7 @@ class HookRunner:
   ) -> tuple[hooks_base.HookResult, Any, hooks_base.OperationContext]:
     """Dispatches interaction events."""
     op_context = hooks_base.OperationContext(turn_context)
-    for hook in self.on_interaction_hooks:
+    for hook in self._on_interaction_hooks:
       res = await hook.run(context=op_context, data=interaction_spec)
       if res is not None:
         return hooks_base.HookResult(allow=True), res, op_context
@@ -194,5 +232,5 @@ class HookRunner:
   ) -> None:
     """Dispatches compaction events (Inspect)."""
     op_context = hooks_base.OperationContext(turn_context)
-    for hook in self.on_compaction_hooks:
+    for hook in self._on_compaction_hooks:
       await hook.run(context=op_context, data=data)

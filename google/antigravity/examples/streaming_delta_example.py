@@ -84,9 +84,7 @@ async def run():
   # Auto-approve all tool calls so the agent can run without human
   # confirmation prompts.
   hr = hooks_runner.HookRunner()
-  hr.pre_tool_call_decide_hooks.append(
-      policy.enforce([policy.allow("*")])
-  )
+  hr.register_hook(policy.enforce([policy.allow("*")]))
 
   strategy = LocalConnectionStrategy(
       hook_runner=hr,

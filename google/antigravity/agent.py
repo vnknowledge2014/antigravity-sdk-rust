@@ -120,9 +120,7 @@ class Agent:
         )
 
       if active_policies:
-        self._hook_runner.pre_tool_call_decide_hooks.append(
-            policy.enforce(active_policies)
-        )
+        self._hook_runner.register_hook(policy.enforce(active_policies))
 
       # Connect MCP servers
       if self._config.mcp_servers:
@@ -196,7 +194,7 @@ class Agent:
       )
 
     assert self._hook_runner is not None
-    self._hook_runner.on_interaction_hooks.append(cli.AskQuestionHook())
+    self._hook_runner.register_hook(cli.AskQuestionHook())
     print("Starting interactive loop. Type 'exit' or 'quit' to end.")
     while True:
       try:

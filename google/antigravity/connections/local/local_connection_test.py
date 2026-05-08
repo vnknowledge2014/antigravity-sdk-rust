@@ -236,12 +236,12 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
   async def test_turn_hook_deny(self):
     hr = hook_runner.HookRunner()
 
-    class DenyingTurnHook:
+    class DenyingTurnHook(hooks_base.PreTurnHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         return hooks_base.HookResult(allow=False, message="Denied by hook")
 
-    hr.pre_turn_hooks.append(DenyingTurnHook())
+    hr.register_hook(DenyingTurnHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -263,12 +263,12 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
   async def test_tool_hook_deny(self):
     hr = hook_runner.HookRunner()
 
-    class DenyingToolHook:
+    class DenyingToolHook(hooks_base.PreToolCallDecideHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         return hooks_base.HookResult(allow=False, message="Denied tool")
 
-    hr.pre_tool_call_decide_hooks.append(DenyingToolHook())
+    hr.register_hook(DenyingToolHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -297,12 +297,12 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
   async def test_tool_confirmation_request_integration(self):
     hr = hook_runner.HookRunner()
 
-    class DenyingToolHook:
+    class DenyingToolHook(hooks_base.PreToolCallDecideHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         return hooks_base.HookResult(allow=False)
 
-    hr.pre_tool_call_decide_hooks.append(DenyingToolHook())
+    hr.register_hook(DenyingToolHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -338,7 +338,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     hook_event = asyncio.Event()
     captured_tool_names = []
 
-    class CapturingToolHook:
+    class CapturingToolHook(hooks_base.PreToolCallDecideHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured_tool_names.append(data.name)
@@ -346,7 +346,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         return hooks_base.HookResult(allow=True)
 
     hr = hook_runner.HookRunner()
-    hr.pre_tool_call_decide_hooks.append(CapturingToolHook())
+    hr.register_hook(CapturingToolHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -378,7 +378,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     hook_event = asyncio.Event()
     captured_tool_names = []
 
-    class CapturingToolHook:
+    class CapturingToolHook(hooks_base.PreToolCallDecideHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured_tool_names.append(data.name)
@@ -386,7 +386,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         return hooks_base.HookResult(allow=True)
 
     hr = hook_runner.HookRunner()
-    hr.pre_tool_call_decide_hooks.append(CapturingToolHook())
+    hr.register_hook(CapturingToolHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -415,7 +415,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
   async def test_question_hook_integration(self):
     hr = hook_runner.HookRunner()
 
-    class AutoAnswerQuestionHook:
+    class AutoAnswerQuestionHook(hooks_base.OnInteractionHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         return hooks_base.QuestionHookResult(
@@ -424,7 +424,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-    hr.on_interaction_hooks.append(AutoAnswerQuestionHook())
+    hr.register_hook(AutoAnswerQuestionHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -462,7 +462,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     hr = hook_runner.HookRunner()
     hook_event = asyncio.Event()
 
-    class CountingHook:
+    class CountingHook(hooks_base.PreToolCallDecideHook):
 
       def __init__(self):
         self.call_count = 0
@@ -474,7 +474,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         return hooks_base.HookResult(allow=True)
 
     hook_instance = CountingHook()
-    hr.pre_tool_call_decide_hooks.append(hook_instance)
+    hr.register_hook(hook_instance)
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -511,7 +511,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     started_event = asyncio.Event()
     finish_event = asyncio.Event()
 
-    class BlockingHook:
+    class BlockingHook(hooks_base.PreToolCallDecideHook):
 
       def __init__(self):
         self.started = False
@@ -526,7 +526,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         return hooks_base.HookResult(allow=True)
 
     hook_instance = BlockingHook()
-    hr.pre_tool_call_decide_hooks.append(hook_instance)
+    hr.register_hook(hook_instance)
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -582,7 +582,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     hr = hook_runner.HookRunner()
     hook_event = asyncio.Event()
 
-    class CountingHook:
+    class CountingHook(hooks_base.PreToolCallDecideHook):
 
       def __init__(self):
         self.call_count = 0
@@ -594,7 +594,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         return hooks_base.HookResult(allow=True)
 
     hook_instance = CountingHook()
-    hr.pre_tool_call_decide_hooks.append(hook_instance)
+    hr.register_hook(hook_instance)
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -1570,14 +1570,14 @@ class LocalConnectionSessionHooksTest(unittest.IsolatedAsyncioTestCase):
     called = []
     event = asyncio.Event()
 
-    class SessionStartHook:
+    class SessionStartHook(hooks_base.OnSessionStartHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         called.append("started")
         event.set()
 
     hr = hook_runner.HookRunner()
-    hr.on_session_start_hooks.append(SessionStartHook())
+    hr.register_hook(SessionStartHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -1594,14 +1594,14 @@ class LocalConnectionSessionHooksTest(unittest.IsolatedAsyncioTestCase):
     called = []
     event = asyncio.Event()
 
-    class SessionEndHook:
+    class SessionEndHook(hooks_base.OnSessionEndHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         called.append("ended")
         event.set()
 
     hr = hook_runner.HookRunner()
-    hr.on_session_end_hooks.append(SessionEndHook())
+    hr.register_hook(SessionEndHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -1627,13 +1627,13 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
     """Verifies PostTurnHook fires when a terminal model step is received."""
     captured = []
 
-    class PostTurnHook:
+    class PostTurnHook(hooks_base.PostTurnHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured.append(data)
 
     hr = hook_runner.HookRunner()
-    hr.post_turn_hooks.append(PostTurnHook())
+    hr.register_hook(PostTurnHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -1748,13 +1748,13 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
     """Verifies PostTurnHook does NOT fire for TARGET_ENVIRONMENT steps."""
     captured = []
 
-    class PostTurnHook:
+    class PostTurnHook(hooks_base.PostTurnHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured.append(data)
 
     hr = hook_runner.HookRunner()
-    hr.post_turn_hooks.append(PostTurnHook())
+    hr.register_hook(PostTurnHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -1825,14 +1825,14 @@ class LocalConnectionCompactionHookTest(unittest.IsolatedAsyncioTestCase):
     captured = []
     event = asyncio.Event()
 
-    class CompactionHook:
+    class CompactionHook(hooks_base.OnCompactionHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured.append(data)
         event.set()
 
     hr = hook_runner.HookRunner()
-    hr.on_compaction_hooks.append(CompactionHook())
+    hr.register_hook(CompactionHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -1907,14 +1907,14 @@ class LocalConnectionSubagentHookTest(unittest.IsolatedAsyncioTestCase):
     hook_event = asyncio.Event()
     captured = []
 
-    class PostToolHook:
+    class PostToolHook(hooks_base.PostToolCallHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured.append(data)
         hook_event.set()
 
     hr = hook_runner.HookRunner()
-    hr.post_tool_call_hooks.append(PostToolHook())
+    hr.register_hook(PostToolHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -2179,7 +2179,7 @@ class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
     hook_event = asyncio.Event()
     captured_results = []
 
-    class PostToolHook:
+    class PostToolHook(hooks_base.PostToolCallHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured_results.append(data)
@@ -2193,7 +2193,7 @@ class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
     tr.register(echo_handler, "echo_tool")
 
     hr = hook_runner.HookRunner()
-    hr.post_tool_call_hooks.append(PostToolHook())
+    hr.register_hook(PostToolHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -2218,7 +2218,7 @@ class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
   async def test_on_tool_error_hook_with_recovery(self):
     """Verifies OnToolErrorHook can provide recovery values on tool failure."""
 
-    class RecoveringErrorHook:
+    class RecoveringErrorHook(hooks_base.OnToolErrorHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         return "recovered_value"
@@ -2231,7 +2231,7 @@ class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
     tr.register(failing_handler, "failing_tool")
 
     hr = hook_runner.HookRunner()
-    hr.on_tool_error_hooks.append(RecoveringErrorHook())
+    hr.register_hook(RecoveringErrorHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -2265,7 +2265,7 @@ class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
     hook_event = asyncio.Event()
     captured_errors = []
 
-    class CapturingErrorHook:
+    class CapturingErrorHook(hooks_base.OnToolErrorHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         captured_errors.append(data)
@@ -2280,7 +2280,7 @@ class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
     tr.register(value_error_tool, "value_error_tool")
 
     hr = hook_runner.HookRunner()
-    hr.on_tool_error_hooks.append(CapturingErrorHook())
+    hr.register_hook(CapturingErrorHook())
 
     harness = test_utils.TestLocalHarness(
         test_case=self,
@@ -2364,13 +2364,13 @@ class LocalConnectionHookAcceptanceTest(unittest.IsolatedAsyncioTestCase):
   async def test_subagent_tool_hooks_accepted(self):
     """Subagent lifecycle is handled by tool hooks; no special subagent lists."""
 
-    class DummyHook:
+    class DummyHook(hooks_base.PreToolCallDecideHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         return hooks_base.HookResult(allow=True)
 
     hr = hook_runner.HookRunner()
-    hr.pre_tool_call_decide_hooks.append(DummyHook())
+    hr.register_hook(DummyHook())
 
     # Should NOT raise.
     test_utils.TestLocalHarness(
@@ -2382,13 +2382,13 @@ class LocalConnectionHookAcceptanceTest(unittest.IsolatedAsyncioTestCase):
   async def test_compaction_hooks_no_longer_raise(self):
     """Compaction hooks should be accepted now."""
 
-    class DummyHook:
+    class DummyHook(hooks_base.OnCompactionHook):
 
       async def run(self, context, data):  # pylint: disable=unused-argument
         pass
 
     hr = hook_runner.HookRunner()
-    hr.on_compaction_hooks.append(DummyHook())
+    hr.register_hook(DummyHook())
 
     # Should NOT raise.
     test_utils.TestLocalHarness(

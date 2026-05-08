@@ -161,10 +161,10 @@ async def run():
     logging.info("MCP server connected (pirate math tools available).")
 
     hr = hooks_runner.HookRunner()
-    hr.pre_tool_call_decide_hooks.append(
+    hr.register_hook(
         policy.enforce([policy.ask_user("*", handler=cli.ask_user_handler)])
     )
-    hr.on_interaction_hooks.append(cli.AskQuestionHook())
+    hr.register_hook(cli.AskQuestionHook())
 
     # Initialize LocalConnectionStrategy with ToolRunner and binary path
     strategy = LocalConnectionStrategy(
