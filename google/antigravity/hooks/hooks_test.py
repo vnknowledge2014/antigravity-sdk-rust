@@ -59,6 +59,22 @@ class BaseHookTest(unittest.IsolatedAsyncioTestCase):
     self.assertTrue(res.allow)
     self.assertEqual(res.message, "allowed")
 
+  async def test_pre_turn_hook(self):
+    """Verifies PreTurnHook accepts types.Content and returns HookResult."""
+
+    class DummyPreTurnHook(hooks.PreTurnHook):
+
+      async def run(
+          self, context: hooks.HookContext, data: Any
+      ) -> hooks.HookResult:
+        return hooks.HookResult(allow=isinstance(data, list), message="checked")
+
+    hook = DummyPreTurnHook()
+    ctx = hooks.HookContext()
+    res = await hook.run(ctx, ["multimodal", "prompt"])
+    self.assertTrue(res.allow)
+    self.assertEqual(res.message, "checked")
+
   async def test_transform_hook(self):
     """Verifies TransformHook can be executed and modifies data."""
 

@@ -160,10 +160,11 @@ class OnSessionEndHook(InspectHook[None]):
 
 
 # Turn
-class PreTurnHook(DecideHook[str]):
+class PreTurnHook(DecideHook[types.Content]):
   """Invoked before a turn starts.
 
-  The `data` parameter receives the user's prompt string.
+  The `data` parameter receives the user's prompt (types.Content), which can
+  be a single string/media object or a list of multimodal primitives.
   """
 
   pass

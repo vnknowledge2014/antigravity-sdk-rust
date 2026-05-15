@@ -147,12 +147,12 @@ class HookRunner:
 
   # Turn
   async def dispatch_pre_turn(
-      self, prompt: str
+      self, prompt: types.Content | None
   ) -> tuple[hooks_base.HookResult, hooks_base.TurnContext]:
     """Dispatches pre-turn events.
 
     Args:
-      prompt: The user prompt.
+      prompt: The user prompt, which may be text, multimodal content, or None.
 
     Returns:
       A tuple of (HookResult, TurnContext).

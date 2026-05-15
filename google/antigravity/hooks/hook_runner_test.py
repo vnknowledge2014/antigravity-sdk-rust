@@ -43,7 +43,7 @@ class HookRunnerTest(unittest.IsolatedAsyncioTestCase):
     class DummyPreTurnHook(hooks.PreTurnHook):
 
       async def run(
-          self, context: hooks.HookContext, data: Any
+          self, context: hooks.HookContext, data: types.Content
       ) -> hooks.HookResult:
         return hooks.HookResult(allow=False, message="Denied")
 
@@ -51,6 +51,40 @@ class HookRunnerTest(unittest.IsolatedAsyncioTestCase):
     res, _ = await runner.dispatch_pre_turn("prompt")
     self.assertFalse(res.allow)
     self.assertEqual(res.message, "Denied")
+
+  async def test_dispatch_pre_turn_multimodal_list(self):
+    captured = []
+
+    class DummyPreTurnHook(hooks.PreTurnHook):
+
+      async def run(
+          self, context: hooks.HookContext, data: Any
+      ) -> hooks.HookResult:
+        captured.append(data)
+        return hooks.HookResult(allow=True)
+
+    runner = hook_runner.HookRunner(pre_turn_hooks=[DummyPreTurnHook()])
+    res, _ = await runner.dispatch_pre_turn(["image", "text"])
+    self.assertTrue(res.allow)
+    self.assertEqual(captured, [["image", "text"]])
+    self.assertIsInstance(runner.session_context, hooks.SessionContext)
+
+  async def test_dispatch_pre_turn_multimodal_none(self):
+    captured = []
+
+    class DummyPreTurnHook(hooks.PreTurnHook):
+
+      async def run(
+          self, context: hooks.HookContext, data: Any
+      ) -> hooks.HookResult:
+        captured.append(data)
+        return hooks.HookResult(allow=True)
+
+    runner = hook_runner.HookRunner(pre_turn_hooks=[DummyPreTurnHook()])
+    res, _ = await runner.dispatch_pre_turn(None)
+    self.assertTrue(res.allow)
+    self.assertEqual(captured, [None])
+    self.assertIsInstance(runner.session_context, hooks.SessionContext)
 
   async def test_dispatch_session_start(self):
     called = False
@@ -409,6 +443,7 @@ class HookRunnerTest(unittest.IsolatedAsyncioTestCase):
     ctx = hooks.HookContext()
     await DummyInspectHook().run(ctx, None)
     await DummyDecideHook().run(ctx, None)
+    await DummyDecideHook().run(ctx, ["dummy_image", "text"])
     await DummyTransformHook().run(ctx, {})
     await DummyInteractionHook().run(
         ctx, types.AskQuestionInteractionSpec(questions=[])
@@ -418,17 +453,35 @@ class HookRunnerTest(unittest.IsolatedAsyncioTestCase):
 class DecoratorTest(unittest.IsolatedAsyncioTestCase):
 
   async def test_pre_turn_decorator(self):
+    captured = []
+
     @hooks.pre_turn
     async def my_pre_turn(data):
-      return hooks.HookResult(allow=True, message=data)
+      captured.append(data)
+      return hooks.HookResult(allow=True)
 
     self.assertIsInstance(my_pre_turn, hooks.PreTurnHook)
     res = await my_pre_turn.run(hooks.HookContext(), "test_prompt")
     self.assertTrue(res.allow)
-    self.assertEqual(res.message, "test_prompt")
+    self.assertEqual(captured, ["test_prompt"])
+
+    captured.clear()
     res2 = await my_pre_turn("direct_call")
     self.assertTrue(res2.allow)
-    self.assertEqual(res2.message, "direct_call")
+    self.assertEqual(captured, ["direct_call"])
+
+    dummy_image = types.Image(data=b"fake_bytes", mime_type="image/png")
+    multimodal_prompt = [dummy_image, "text_prompt"]
+
+    captured.clear()
+    res3 = await my_pre_turn.run(hooks.HookContext(), multimodal_prompt)
+    self.assertTrue(res3.allow)
+    self.assertEqual(captured, [multimodal_prompt])
+
+    captured.clear()
+    res4 = await my_pre_turn(multimodal_prompt)
+    self.assertTrue(res4.allow)
+    self.assertEqual(captured, [multimodal_prompt])
 
   async def test_pre_tool_call_decide_decorator(self):
     @hooks.pre_tool_call_decide
