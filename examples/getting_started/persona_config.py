@@ -184,7 +184,11 @@ Storage Directory (App Data): {app_data_dir}
   # Configure the active skill folders.
   # By default in the SDK, configured skill paths are dynamically prepended to
   # the turns. Under a custom override, we manually compile and append them.
-  skills = ["/path/to/my_skills/code_quality_reviewer_skill"]
+  script_dir = os.path.dirname(os.path.abspath(__file__))
+  skill_path = os.path.abspath(
+      os.path.join(script_dir, "../../skills/google-antigravity-sdk")
+  )
+  skills = [skill_path]
   skills_instructions = _build_skills_instructions(skills)
 
   # Standard structured guidelines & formatting rules text
