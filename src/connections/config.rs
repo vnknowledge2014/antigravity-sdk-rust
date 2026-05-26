@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 /// Configuration for the local harness backend.
 pub struct LocalAgentConfig {
-    pub gemini_config: types::GeminiConfig,
+    pub backend: types::ModelBackend,
     pub capabilities: types::CapabilitiesConfig,
     pub policies: Arc<Vec<Policy>>,
     pub system_instructions: Option<types::SystemInstructions>,
@@ -43,7 +43,7 @@ pub struct LocalAgentConfig {
 impl Default for LocalAgentConfig {
     fn default() -> Self {
         Self {
-            gemini_config: types::GeminiConfig::default(),
+            backend: types::ModelBackend::default(),
             capabilities: types::CapabilitiesConfig::default(),
             policies: Arc::new(crate::hooks::policy::confirm_run_command()),
             system_instructions: None,
@@ -63,21 +63,41 @@ impl Default for LocalAgentConfig {
 }
 
 impl LocalAgentConfig {
-    /// Returns the effective GeminiConfig with shorthand fields applied.
-    pub fn effective_gemini_config(&self) -> types::GeminiConfig {
-        let mut cfg = self.gemini_config.clone();
-        if let Some(ref model) = self.model {
-            cfg.models.default = types::ModelEntry::from(model.as_str());
+    /// Returns the effective ModelBackend with shorthand fields applied.
+    pub fn effective_backend_config(&self) -> types::ModelBackend {
+        let mut backend = self.backend.clone();
+        match backend {
+            types::ModelBackend::Gemini(ref mut cfg) => {
+                if let Some(ref model) = self.model {
+                    cfg.models.default = types::ModelEntry::from(model.as_str());
+                }
+                if let Some(ref key) = self.api_key {
+                    cfg.api_key = Some(key.clone());
+                }
+            }
+            types::ModelBackend::OpenAICompatible(ref mut cfg) => {
+                if let Some(ref model) = self.model {
+                    cfg.model_name = Some(model.clone());
+                }
+                if let Some(ref key) = self.api_key {
+                    cfg.api_key = Some(key.clone());
+                }
+            }
+            types::ModelBackend::Anthropic(ref mut cfg) => {
+                if let Some(ref model) = self.model {
+                    cfg.model_name = Some(model.clone());
+                }
+                if let Some(ref key) = self.api_key {
+                    cfg.api_key = Some(key.clone());
+                }
+            }
         }
-        if let Some(ref key) = self.api_key {
-            cfg.api_key = Some(key.clone());
-        }
-        cfg
+        backend
     }
 
     /// Builds the HarnessConfig proto for the Go harness.
     pub fn build_harness_config(&self, tool_protos: Vec<Tool>) -> HarnessConfig {
-        let gemini = self.effective_gemini_config();
+        let backend_cfg = self.effective_backend_config();
         let cfg = &self.capabilities;
 
         // Determine active tools
@@ -142,39 +162,41 @@ impl LocalAgentConfig {
             })
             .collect();
 
-        let gemini_config_wire = crate::connections::wire_types::localharness::GeminiConfig {
-            api_key: Some(
-                gemini
-                    .models
-                    .default
-                    .api_key
-                    .or(gemini.api_key)
-                    .unwrap_or_default(),
-            ),
-            base_url: None,
-            model_name: Some(gemini.models.default.name),
-            thinking_level: Some(
-                gemini
-                    .models
-                    .default
-                    .generation
-                    .thinking_level
-                    .map(|l| match l {
+        let model_config_wire = match backend_cfg {
+            types::ModelBackend::Gemini(gemini) => {
+                Some(ModelConfig::GeminiConfig(crate::connections::wire_types::localharness::GeminiConfig {
+                    api_key: Some(gemini.models.default.api_key.or(gemini.api_key).unwrap_or_default()),
+                    base_url: None,
+                    model_name: Some(gemini.models.default.name),
+                    thinking_level: Some(gemini.models.default.generation.thinking_level.map(|l| match l {
                         ThinkingLevel::Minimal => "minimal",
                         ThinkingLevel::Low => "low",
                         ThinkingLevel::Medium => "medium",
                         ThinkingLevel::High => "high",
-                    })
-                    .unwrap_or("")
-                    .to_string(),
-            ),
-            enable_url_context: None,
-            enable_google_search: None,
+                    }).unwrap_or("").to_string()),
+                    enable_url_context: None,
+                    enable_google_search: None,
+                }))
+            }
+            types::ModelBackend::OpenAICompatible(gemma) => {
+                Some(ModelConfig::GemmaConfig(crate::connections::wire_types::localharness::GemmaConfig {
+                    api_key: gemma.api_key,
+                    base_url: gemma.base_url,
+                    model_name: gemma.model_name,
+                }))
+            }
+            types::ModelBackend::Anthropic(anthropic) => {
+                Some(ModelConfig::AnthropicConfig(crate::connections::wire_types::localharness::AnthropicConfig {
+                    api_key: anthropic.api_key,
+                    model_name: anthropic.model_name,
+                    thinking_level: anthropic.thinking_level,
+                }))
+            }
         };
 
         HarnessConfig {
             cascade_id: Some(self.conversation_id.clone().unwrap_or_default()),
-            model_config: Some(ModelConfig::GeminiConfig(gemini_config_wire)),
+            model_config: model_config_wire,
             system_instructions: None, // TODO: serialize SystemInstructions
             tools: tool_protos,
             harness_side_tools: Some(harness_side_tools),
@@ -191,7 +213,7 @@ impl LocalAgentConfig {
 impl Clone for LocalAgentConfig {
     fn clone(&self) -> Self {
         Self {
-            gemini_config: self.gemini_config.clone(),
+            backend: self.backend.clone(),
             capabilities: self.capabilities.clone(),
             policies: self.policies.clone(),
             system_instructions: self.system_instructions.clone(),
@@ -221,19 +243,27 @@ mod tests {
     }
 
     #[test]
-    fn test_effective_gemini_config_model_override() {
+    fn test_effective_backend_config_model_override() {
         let mut cfg = LocalAgentConfig::default();
         cfg.model = Some("gemini-2.5-pro".to_string());
-        let effective = cfg.effective_gemini_config();
-        assert_eq!(effective.models.default.name, "gemini-2.5-pro");
+        let effective = cfg.effective_backend_config();
+        if let types::ModelBackend::Gemini(gemini) = effective {
+            assert_eq!(gemini.models.default.name, "gemini-2.5-pro");
+        } else {
+            panic!("Expected Gemini backend");
+        }
     }
 
     #[test]
-    fn test_effective_gemini_config_api_key_override() {
+    fn test_effective_backend_config_api_key_override() {
         let mut cfg = LocalAgentConfig::default();
         cfg.api_key = Some("test-key-123".to_string());
-        let effective = cfg.effective_gemini_config();
-        assert_eq!(effective.api_key.as_deref(), Some("test-key-123"));
+        let effective = cfg.effective_backend_config();
+        if let types::ModelBackend::Gemini(gemini) = effective {
+            assert_eq!(gemini.api_key.as_deref(), Some("test-key-123"));
+        } else {
+            panic!("Expected Gemini backend");
+        }
     }
 
     #[test]

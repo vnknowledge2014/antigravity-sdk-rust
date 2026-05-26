@@ -135,6 +135,38 @@ pub struct GeminiConfig {
     pub models: ModelConfig,
 }
 
+/// Configuration for OpenRouter, Ollama, and OpenAI-compatible endpoints.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GemmaConfig {
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub model_name: Option<String>,
+}
+
+/// Configuration for the Anthropic API backend.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AnthropicConfig {
+    pub api_key: Option<String>,
+    pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
+}
+
+/// Enum for selecting the backend provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "provider")]
+pub enum ModelBackend {
+    Gemini(GeminiConfig),
+    OpenAICompatible(GemmaConfig),
+    Anthropic(AnthropicConfig),
+}
+
+impl Default for ModelBackend {
+    fn default() -> Self {
+        Self::Gemini(GeminiConfig::default())
+    }
+}
+
+
 /// A named section to append to the system instructions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemInstructionSection {
