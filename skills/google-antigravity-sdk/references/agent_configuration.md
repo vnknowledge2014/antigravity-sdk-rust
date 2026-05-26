@@ -35,15 +35,22 @@ Here are small code snippets demonstrating advanced configurations using
 
 ### Basic Configuration with Model Selection
 
-```python
-from google.antigravity import Agent, LocalAgentConfig
+```rust
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
 
-config = LocalAgentConfig(
-    model="gemini-3.5-flash",
-)
-async with Agent(config=config) as agent:
-    # Use the agent
-    pass
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = LocalAgentConfig {
+        model: Some("gemini-3.5-flash".to_string()),
+        ..Default::default()
+    };
+    let mut agent = Agent::new(config);
+    agent.start().await?;
+    // Use the agent
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 ### Application Data Directory Override (Artifact & Scratch Storage)
@@ -52,15 +59,22 @@ By default, the agent stores generated artifacts (like `task.md`), scratch
 files, and uploaded media under `~/.gemini/antigravity/brain/`. You can override
 this location by specifying an absolute path in `app_data_dir`:
 
-```python
-from google.antigravity import Agent, LocalAgentConfig
+```rust
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
 
-config = LocalAgentConfig(
-    app_data_dir="/absolute/path/to/custom/storage",
-)
-async with Agent(config=config) as agent:
-    # Generated files and artifacts will be written inside the custom directory
-    pass
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let config = LocalAgentConfig {
+        app_data_dir: Some("/absolute/path/to/custom/storage".to_string()),
+        ..Default::default()
+    };
+    let mut agent = Agent::new(config);
+    agent.start().await?;
+    // Generated files and artifacts will be written inside the custom directory
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 > [!IMPORTANT] **The path must be an absolute path.** Passing relative paths or
@@ -69,21 +83,41 @@ async with Agent(config=config) as agent:
 ### System Instructions and Personas
 
 You can configure system instructions directly in the `LocalAgentConfig`:
-`python config = LocalAgentConfig( system_instructions="You are an expert
-software architect.", )` For a more detailed guide and complex persona examples,
+```rust
+let config = LocalAgentConfig {
+    system_instructions: Some("You are an expert software architect.".to_string()),
+    ..Default::default()
+};
+```
+For a more detailed guide and complex persona examples,
 see [persona_config.md](../../examples/getting_started/persona_config.md).
 
 ### Custom Tools
 
-You can add custom tools to your agent: ```python from google.antigravity import
-Agent, LocalAgentConfig
-
-config = LocalAgentConfig( tools=[my_custom_tool_function], ) ``` For a full
+You can add custom tools to your agent:
+```rust
+let config = LocalAgentConfig {
+    tools: vec![Box::new(MyCustomTool)],
+    ..Default::default()
+};
+```
+For a full
 guide on creating and using custom tools, see
-[custom_tool.md](../../examples/getting_started/custom_tool.md).
+[custom_tool.md](../../examples/getting_started/custom_tools.md).
 
 ### MCP Integration
 
-To configure Model Context Protocol (MCP) servers: `python config =
-LocalAgentConfig( mcp_servers={"my_mcp_server": "http://localhost:8080"}, )` For
+To configure Model Context Protocol (MCP) servers:
+```rust
+use std::collections::HashMap;
+
+let mut mcp_servers = HashMap::new();
+mcp_servers.insert("my_mcp_server".to_string(), "http://localhost:8080".to_string());
+
+let config = LocalAgentConfig {
+    mcp_servers,
+    ..Default::default()
+};
+```
+For
 more details, see [mcp_integration.md](mcp_integration.md).

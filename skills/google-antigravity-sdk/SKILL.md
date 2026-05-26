@@ -1,9 +1,12 @@
 ---
 name: google-antigravity-sdk
-description: "Design, implement, and debug autonomous AI agents and multi-agent systems using the Google Antigravity (AGY) SDK. ACTIVATE this skill when the user wants to create, configure, or orchestrate Google Antigravity agents."
+description: >
+  Provides core documentation and examples for building AI agents with the
+  Antigravity SDK (Rust Edition). Use this skill when the user asks questions about
+  how to use the SDK, how to configure agents, how to use tools, etc.
 ---
 
-# Google Antigravity SDK
+# Google Antigravity SDK (Rust Edition)
 
 ## Installation & Setup
 
@@ -11,20 +14,20 @@ Before proceeding with any Google Antigravity tasks, ensure the environment is
 ready:
 
 -   **Verify Applicability**: If operating in an existing codebase, verify that
-    using this Python SDK is possible and appropriate for the project.
--   **Check Dependencies**: Check if `google-antigravity` is listed in the
-    project's dependencies (e.g., `requirements.txt`, `pyproject.toml`).
--   **Install Package**: Ensure the `google-antigravity` Python package is
-    installed.
+    using this Rust SDK is possible and appropriate for the project.
+-   **Check Dependencies**: Check if `antigravity-sdk` is listed in the
+    project's `Cargo.toml` dependencies.
+-   **Build the Project**: Ensure the project compiles with `cargo check`.
+    The SDK requires `protoc` (Protocol Buffers compiler) to be installed.
 -   **Authentication Setup**: Check for a valid `GEMINI_API_KEY` environment
     variable or a `.env` file (required to access Gemini models).
     -   If credentials are missing, you MUST actively help the user get set up
         with an API key by providing the following link:
         -   Default to Google AI Studio:
             `https://aistudio.google.com/app/api-keys`
-    -   Explain that the API key can be passed explicitly in code as shorthand
-        (e.g., `LocalAgentConfig(api_key="...")`) or automatically read from the
-        environment.
+    -   Explain that the API key can be passed explicitly in code via config
+        (e.g., `LocalAgentConfig { api_key: Some("...".into()), ..Default::default() }`)
+        or automatically read from the environment.
 
 ## Routing Table
 
@@ -59,7 +62,7 @@ relevant information.
 -   If the user needs to implement basic agent behavior, streaming responses, or
     expose internal thoughts, read `examples/getting_started/hello_world.md`.
 -   If the user needs to equip an agent with custom capabilities (tools) derived
-    from Python functions, or maintain agent state across tool execution, read
+    from Rust functions/closures, or maintain agent state across tool execution, read
     `examples/getting_started/custom_tool.md`.
 -   If the user needs to shape an agent's persona, define its system
     instructions, or dynamically adapt its behavior, read
@@ -85,7 +88,7 @@ relevant information.
     for agent artifacts, scratch files, and media storage, read
     `examples/getting_started/app_data_dir_override.md`.
 -   If the user needs an agent to output structured data (e.g., JSON matching a
-    Pydantic schema) for reliable integration, read
+    schema) for reliable integration, read
     `examples/getting_started/structured_output.md`.
 -   If the user needs to add, configure, or load agent skills into the Google
     Antigravity SDK agent, read `examples/getting_started/agent_skills.md`.

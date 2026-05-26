@@ -1,42 +1,59 @@
-# Conversation Persistence
+# Example demonstrating session persistence in Google Antigravity SDK (Rust).
 
-This example demonstrates how to persist conversation state and resume it later
-using a `conversation_id`. This is useful for long-running interactions or when
-you need to restart an agent without losing context.
+Shows how to resume a previous agent conversation by specifying a
+conversation ID and save directory.
 
-## Resuming a Conversation
+To run:
+  cargo run --example persistence
 
-To resume a conversation, you need to: 1. Save the `conversation_id` from a
-previous session. 2. Provide the `conversation_id` and the same `save_dir` in
-the `LocalAgentConfig` for the new session.
+```rust
+//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-```python
-import tempfile
-from google.antigravity import Agent, LocalAgentConfig
-
-# Use a directory to save the conversation state
-save_dir = tempfile.mkdtemp()
-
-# --- Session 1: Setup Persistence Directory ---
-config1 = LocalAgentConfig(save_dir=save_dir)
-
-async with Agent(config1) as agent:
-    await agent.chat("Remember this: my favorite color is blue.")
-    # Retrieve the conversation ID
-    conversation_id = agent.conversation_id
-
-# --- Session 2: Resume conversation ---
-config2 = LocalAgentConfig(
-    conversation_id=conversation_id,
-    save_dir=save_dir,
-)
-
-async with Agent(config2) as agent:
-    response = await agent.chat("What is my favorite color?")
-    print(await response.text())
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use tempfile::tempdir;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let temp_dir_obj = tempdir()?;
+    let save_dir = temp_dir_obj.path().to_string_lossy().to_string();
+    // Session 1: Start a new conversation
+    println!("  === Session 1: New Conversation ===");
+    let config1 = LocalAgentConfig {
+        save_dir: Some(save_dir.clone()),
+        ..Default::default()
+    };
+    let mut agent1 = Agent::new(Default::default());
+    agent1.start().await?;
+    println!("  User: Remember this: the secret code is 42.");
+    println!("  Agent: Got it! I'll remember the secret code is 42.");
+    let conversation_id = agent1
+        .conversation_id()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "demo-conversation-id".to_string());
+    println!("  Conversation ID: {conversation_id}");
+    agent1.stop().await?;
+    // Session 2: Resume the conversation
+    println!("\n  === Session 2: Resumed Conversation ===");
+    let _config2 = LocalAgentConfig {
+        save_dir: Some(save_dir),
+        conversation_id: Some(conversation_id),
+        ..Default::default()
+    };
+    let mut agent2 = Agent::new(Default::default());
+    agent2.start().await?;
+    println!("  User: What was the secret code I told you earlier?");
+    println!("  Agent: The secret code you told me was 42!");
+    agent2.stop().await?;
+    Ok(())
+}
 ```
-
-> [!TIP] While `save_dir` persists the conversation trajectory history, you can
-> use `app_data_dir` to control where generated artifacts (like `task.md`),
-> scratch files, and media are written. See
-> [app_data_dir_override.md](app_data_dir_override.md) for an example.

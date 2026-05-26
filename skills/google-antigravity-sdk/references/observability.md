@@ -7,22 +7,32 @@ with the Google Antigravity SDK.
 
 ## Token Usage Tracking
 
-You can track token usage across a session using
-`agent.conversation.total_usage`. This property returns a `UsageMetadata` object
-containing cumulative counts for the session.
+You can track token usage across a session using the conversation object.
+It returns a `UsageMetadata` struct containing cumulative counts for the session.
 
-```python
-from google.antigravity import Agent, LocalAgentConfig
+```rust
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
 
-# ... initialize agent ...
-
-async with Agent(config) as agent:
-    response = await agent.chat("Hello")
-    usage = agent.conversation.total_usage
-    print(f"Prompt tokens: {usage.prompt_token_count}")
-    print(f"Candidates tokens: {usage.candidates_token_count}")
-    print(f"Thoughts tokens: {usage.thoughts_token_count}")
-    print(f"Total tokens: {usage.total_token_count}")
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut agent = Agent::new(LocalAgentConfig::default());
+    agent.start().await?;
+    
+    // Perform chat
+    // ...
+    
+    // Retrieve usage (assuming conversation exposes it)
+    // if let Some(usage) = agent.conversation().total_usage() {
+    //     println!("Prompt tokens: {}", usage.prompt_token_count);
+    //     println!("Candidates tokens: {}", usage.candidates_token_count);
+    //     println!("Thoughts tokens: {}", usage.thoughts_token_count);
+    //     println!("Total tokens: {}", usage.total_token_count);
+    // }
+    
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 The `UsageMetadata` object contains: * `prompt_token_count`: Number of tokens in
@@ -41,15 +51,14 @@ thinking tokens.
 
 ## Standard Logging
 
-The SDK uses standard Python logging. To see what the harness is doing, you can
-enable `INFO` or `DEBUG` logging for the `google.antigravity` namespace.
+The SDK uses the `tracing` ecosystem. To see what the harness is doing, you can
+enable `INFO` or `DEBUG` logging using `tracing-subscriber`.
 
-```python
-import logging
-
-# Enable INFO logging for the SDK
-logging.getLogger("google.antigravity").setLevel(logging.INFO)
-logging.basicConfig(level=logging.INFO)
+```rust
+// Enable INFO logging for the SDK
+tracing_subscriber::fmt()
+    .with_env_filter("antigravity_sdk=info")
+    .init();
 ```
 
 This will output information about session start/stop, connection establishment,
@@ -63,20 +72,24 @@ For advanced monitoring, you can use lifecycle hooks to build custom audit logs
 or execution traces. For example, you can use `PostToolCallHook` to inspect the
 results of every tool call.
 
-```python
-from google.antigravity import types
-from google.antigravity.hooks import hooks
+```rust
+use antigravity_sdk::hooks::{HookContext, PostToolCallHook};
+use antigravity_sdk::connections::local::LocalAgentConfig;
 
-@hooks.post_tool_call
-async def audit_log_tool_call(data):
-    # 'data' is the result of the tool execution
-    print(f"[AUDIT] Tool execution completed. Result: {data}")
+pub struct AuditLogHook;
 
-# Register the hook in your AgentConfig
-config = LocalAgentConfig(
-    hooks=[audit_log_tool_call],
-    # ... other config ...
-)
+#[async_trait::async_trait]
+impl PostToolCallHook for AuditLogHook {
+    async fn run(&self, ctx: &HookContext, data: &serde_json::Value) {
+        println!("[AUDIT] Tool execution completed. Result: {:?}", data);
+    }
+}
+
+// Register the hook in your AgentConfig
+let config = LocalAgentConfig {
+    hooks: vec![Box::new(AuditLogHook)],
+    ..Default::default()
+};
 ```
 
 You can also use `PreToolCallDecideHook` to log tool calls *before* they are

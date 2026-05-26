@@ -31,21 +31,35 @@ locally. This is configured in `LocalAgentConfig` using `mcp_servers`.
 
 ### Example
 
-```python
-from google.antigravity import Agent, LocalAgentConfig, types
+```rust
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::types::McpStdioServer;
+use std::collections::HashMap;
 
-mcp_servers = [
-    types.McpStdioServer(
-        command="python3",
-        args=["mcp_server.py"],
-    )
-]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "my_stdio_server".to_string(),
+        McpStdioServer {
+            command: "python3".to_string(),
+            args: vec!["mcp_server.py".to_string()],
+            ..Default::default()
+        }.into()
+    );
 
-config = LocalAgentConfig(mcp_servers=mcp_servers)
+    let config = LocalAgentConfig {
+        mcp_servers,
+        ..Default::default()
+    };
 
-async with Agent(config) as agent:
-    response = await agent.chat("Use the MCP server to perform a task.")
-    print(await response.text())
+    let mut agent = Agent::new(config);
+    agent.start().await?;
+    // agent.chat("Use the MCP server to perform a task.").await?;
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 ## SSE Transport Configuration
@@ -55,21 +69,37 @@ web service.
 
 ### Example
 
-```python
-from google.antigravity import Agent, LocalAgentConfig, types
+```rust
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::types::McpSseServer;
+use std::collections::HashMap;
 
-mcp_servers = [
-    types.McpSseServer(
-        url="https://example.com/mcp/sse",
-        headers={"Authorization": "Bearer your-token-here"},  # Optional headers
-    )
-]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut headers = HashMap::new();
+    headers.insert("Authorization".to_string(), "Bearer your-token-here".to_string());
 
-config = LocalAgentConfig(mcp_servers=mcp_servers)
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "my_sse_server".to_string(),
+        McpSseServer {
+            url: "https://example.com/mcp/sse".to_string(),
+            headers,
+        }.into()
+    );
 
-async with Agent(config) as agent:
-    response = await agent.chat("Ask the remote MCP server to perform a task.")
-    print(await response.text())
+    let config = LocalAgentConfig {
+        mcp_servers,
+        ..Default::default()
+    };
+
+    let mut agent = Agent::new(config);
+    agent.start().await?;
+    // agent.chat("Ask the remote MCP server to perform a task.").await?;
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 ## Accessing Tools
@@ -85,18 +115,19 @@ By default, the SDK's default policy (`confirm_run_command()`) is permissive and
 `run_command`).
 
 However, if you configure a strict **deny-by-default** setup (using
-`policy.deny_all()`), you must explicitly allow your MCP tools by their exact
+`Policy::deny_all()`), you must explicitly allow your MCP tools by their exact
 registered names.
 
 For example, to allow a specific tool named `my_mcp_tool` exposed by your MCP
 server in a deny-by-default setup:
 
-```python
-# In your safety policy configuration
-policies = [
-    policy.deny_all(),
-    policy.allow("my_mcp_tool"),  # Must use the exact tool name
-]
+```rust
+use antigravity_sdk::hooks::policy::Policy;
+
+let policies = vec![
+    Policy::deny_all(),
+    Policy::allow("my_mcp_tool"),  // Must use the exact tool name
+];
 ```
 
 See [Safety Policies](safety_policies.md) for more details on how to configure
@@ -105,8 +136,7 @@ policies.
 ## Gotchas
 
 > [!WARNING] **Identifier Safety**: FastMCP (used under the hood) requires tool
-> and parameter names to be valid Python identifiers. Ensure your MCP server
-> adheres to this.
+> and parameter names to be valid identifiers. Ensure your MCP server adheres to this.
 
 > [!IMPORTANT] **Permissions**: Failing to grant permissions for MCP tools will
 > prevent the agent from using them, even if the server is correctly connected.

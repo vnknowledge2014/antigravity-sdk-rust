@@ -1,15 +1,15 @@
 ---
 name: Bug Report
-about: Report a bug in the Google Antigravity SDK
+about: Report a bug in the Google Antigravity SDK (Rust)
 labels: bug
 ---
 
 ## Environment
 
-- **SDK version**: (e.g., 0.1.0)
-- **Python version**: (e.g., 3.13.1)
+- **SDK version**: (e.g., 0.1.0 — check `Cargo.toml`)
+- **Rust version**: (output of `rustc --version`)
 - **OS / platform**: (e.g., macOS ARM64, Linux x86_64)
-- **Install method**: (e.g., `pip install google-antigravity`)
+- **Install method**: (e.g., git dependency, local path)
 
 ## Description
 

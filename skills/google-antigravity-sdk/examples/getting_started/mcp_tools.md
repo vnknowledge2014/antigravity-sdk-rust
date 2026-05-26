@@ -1,72 +1,41 @@
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
+# Example demonstrating MCP (Model Context Protocol) tools in Google Antigravity SDK (Rust).
 
-# Model Context Protocol (MCP)
+MCP allows the agent to discover and call tools exposed by external servers,
+enabling integration with third-party services and custom tooling.
 
-This example demonstrates how to connect an agent to an external Model Context
-Protocol (MCP) server. The SDK supports both `stdio` and `sse` (Server-Sent
-Events) transports.
+To run:
+  cargo run --example mcp_tools
 
-For conceptual details and information on permissions, see the
-[MCP Integration Reference Guide](../../references/mcp_integration.md).
+```rust
+//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-## Connecting via Stdio
-
-Assume we have an MCP server (e.g., `mcp_server.py`) using the `FastMCP` library
-that exposes an `add_numbers` tool:
-
-```python
-from mcp.server import fastmcp
-
-mcp = fastmcp.FastMCP("MathServer")
-
-
-@mcp.tool()
-def add_numbers(a: int, b: int) -> int:
-    """Adds two numbers."""
-    return a + b
-
-
-mcp.run()
-```
-
-To connect the agent to this MCP server via `stdio` transport:
-
-```python
-from google.antigravity import Agent, LocalAgentConfig, types
-
-mcp_servers = [
-    types.McpStdioServer(
-        command="python3",
-        args=["mcp_server.py"],
-    )
-]
-
-config = LocalAgentConfig(mcp_servers=mcp_servers)
-
-async with Agent(config) as agent:
-    response = await agent.chat("Add 5 and 3 using the add_numbers tool.")
-    print(await response.text())
-```
-
-## Connecting via SSE
-
-You can also connect to a remote MCP server running as a web service using the
-`sse` transport:
-
-```python
-from google.antigravity import Agent, LocalAgentConfig, types
-
-mcp_servers = [
-    types.McpSseServer(
-        url="https://example.com/mcp/sse",
-        headers={"Authorization": "Bearer your-token-here"},  # Optional headers
-    )
-]
-
-config = LocalAgentConfig(mcp_servers=mcp_servers)
-
-async with Agent(config) as agent:
-    response = await agent.chat("Ask the remote MCP server to perform a task.")
-    print(await response.text())
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::types::McpServerConfig;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Configure MCP server (stdio transport)
+    let _mcp_server = McpServerConfig::Stdio(antigravity_sdk::types::McpStdioServer {
+        command: "python".to_string(),
+        args: vec!["../resources/mcp_server.py".to_string()],
+    });
+    let _config = LocalAgentConfig::default();
+    let mut agent = Agent::new(Default::default());
+    agent.start().await?;
+    let prompt = "Use the available MCP tools to check the current weather in London.";
+    println!("  User: {prompt}");
+    println!("  Agent: [MCP tool call result]");
+    agent.stop().await?;
+    Ok(())
+}
 ```

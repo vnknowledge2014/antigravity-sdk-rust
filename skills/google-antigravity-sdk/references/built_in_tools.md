@@ -10,17 +10,17 @@ descriptions.
 
 Tool Enum                     | Tool Name          | Description
 ----------------------------- | ------------------ | --------------------------
-`BuiltinTools.LIST_DIR`       | `list_directory`   | List directory contents.
-`BuiltinTools.SEARCH_DIR`     | `search_directory` | Search within directories.
-`BuiltinTools.FIND_FILE`      | `find_file`        | Find files by name.
-`BuiltinTools.VIEW_FILE`      | `view_file`        | View file contents.
-`BuiltinTools.FINISH`         | `finish`           | Finish and return output.
-`BuiltinTools.CREATE_FILE`    | `create_file`      | Create a new file.
-`BuiltinTools.EDIT_FILE`      | `edit_file`        | Edit an existing file.
-`BuiltinTools.RUN_COMMAND`    | `run_command`      | Execute a shell command.
-`BuiltinTools.ASK_QUESTION`   | `ask_question`     | Ask user a question.
-`BuiltinTools.START_SUBAGENT` | `start_subagent`   | Invoke a subagent.
-`BuiltinTools.GENERATE_IMAGE` | `generate_image`   | Generate or edit images.
+`BuiltinTools::ListDir`       | `list_directory`   | List directory contents.
+`BuiltinTools::SearchDir`     | `search_directory` | Search within directories.
+`BuiltinTools::FindFile`      | `find_file`        | Find files by name.
+`BuiltinTools::ViewFile`      | `view_file`        | View file contents.
+`BuiltinTools::Finish`         | `finish`           | Finish and return output.
+`BuiltinTools::CreateFile`    | `create_file`      | Create a new file.
+`BuiltinTools::EditFile`      | `edit_file`        | Edit an existing file.
+`BuiltinTools::RunCommand`    | `run_command`      | Execute a shell command.
+`BuiltinTools::AskQuestion`   | `ask_question`     | Ask user a question.
+`BuiltinTools::StartSubagent` | `start_subagent`   | Invoke a subagent.
+`BuiltinTools::GenerateImage` | `generate_image`   | Generate or edit images.
 
 > [!NOTE] Some production backends may require additional environment or
 > filesystem configuration to support these tools.

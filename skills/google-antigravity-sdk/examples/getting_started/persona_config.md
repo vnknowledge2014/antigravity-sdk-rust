@@ -1,77 +1,63 @@
-# System Instructions and Persona
+# Example demonstrating persona configuration in Google Antigravity SDK (Rust).
 
-This example demonstrates how to configure system instructions or persona for an
-agent using the Google Antigravity SDK. You can either append to the default
-instructions or completely overwrite them.
+Shows how to customize the agent's persona via system instructions.
 
-## Appending to Instructions (Recommended)
+To run:
+  cargo run --example persona_config
 
-To add custom instructions or change the agent's identity while retaining the
-default safety and operational guidelines, use `TemplatedSystemInstructions`.
+```rust
+//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Alternatively, you can pass a simple string, which will be treated as an
-additional instruction section.
-
-### Using TemplatedSystemInstructions
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import TemplatedSystemInstructions
-
-# Define the persona (identity)
-identity = "You are a helpful assistant that speaks like a pirate."
-
-# Configure the templated system instructions
-templated_si = TemplatedSystemInstructions(
-    identity=identity
-)
-
-config = LocalAgentConfig(
-    system_instructions=templated_si
-)
-
-async with Agent(config) as agent:
-    response = await agent.chat("Hello! Who are you?")
-    print(await response.text())
-```
-
-### Using a Simple String (Shorthand for Append)
-
-Passing a string will append it as a new section to the default instructions.
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-
-config = LocalAgentConfig(
-    system_instructions="Always respond in pirate slang."
-)
-
-async with Agent(config) as agent:
-    response = await agent.chat("Hello!")
-    print(await response.text())
-```
-
-## Overwriting Instructions (Advanced)
-
-To completely replace all default system instructions (including safety and core
-mandates), use `CustomSystemInstructions`.
-
-> [!WARNING] Use this with caution. You will be responsible for providing all
-> necessary safety and operational instructions.
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import CustomSystemInstructions
-
-custom_si = CustomSystemInstructions(
-    text="You are a minimal assistant. You only answer with 'Yes' or 'No'."
-)
-
-config = LocalAgentConfig(
-    system_instructions=custom_si
-)
-
-async with Agent(config) as agent:
-    response = await agent.chat("Is the sky blue?")
-    print(await response.text())
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::types::{
+    SystemInstructionSection, SystemInstructions, TemplatedSystemInstructions,
+};
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    println!("  === Persona Configuration Demo ===");
+    // Configure a pirate persona
+    let _config = LocalAgentConfig {
+        system_instructions: Some(SystemInstructions::Templated(TemplatedSystemInstructions {
+            identity: Some("You are Captain Code, a swashbuckling programming pirate.".to_string()),
+            sections: vec![
+                SystemInstructionSection {
+                    title: "communication_style".to_string(),
+                    content: "Always respond in pirate speak. Use nautical metaphors \
+                                  for programming concepts. Address the user as 'matey'."
+                        .to_string(),
+                },
+                SystemInstructionSection {
+                    title: "expertise".to_string(),
+                    content: "You are an expert in Rust programming and systems design. \
+                                  When explaining code, use pirate analogies."
+                        .to_string(),
+                },
+            ],
+        })),
+        ..Default::default()
+    };
+    let mut agent = Agent::new(Default::default());
+    agent.start().await?;
+    let prompt = "Explain ownership in Rust.";
+    println!("\n  User: {prompt}");
+    println!(
+        "  Agent: Ahoy matey! Ownership be like a treasure map — only one \
+         pirate can hold the map at a time! When ye pass it to another crew \
+         member, ye no longer have it. That be the borrowin' rules of Rust, \
+         arrr!"
+    );
+    agent.stop().await?;
+    Ok(())
+}
 ```

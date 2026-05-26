@@ -1,22 +1,24 @@
-# Google Antigravity SDK
+# Google Antigravity SDK (Rust Edition)
 
-The Google Antigravity SDK is a Python SDK for building AI agents powered by
+> **Disclaimer:** This is an unofficial port of the Google Antigravity SDK from Python to Rust. It is not an official Google project.
+
+The Google Antigravity SDK is a Rust SDK for building AI agents powered by
 Antigravity and Gemini. It provides a secure, scalable, and stateful
 infrastructure layer that abstracts the agentic loop, letting you focus on what
 your agent *does* rather than how it runs.
 
 ## Installation
 
-```sh
-pip install google-antigravity
+Add the SDK to your `Cargo.toml`:
+
+```toml
+[dependencies]
+antigravity-sdk = { path = "path/to/antigravity-sdk" } # Or git repository URL
+tokio = { version = "1", features = ["full"] }
 ```
 
 > [!IMPORTANT]
-> The Google Antigravity SDK relies on a compiled runtime binary that is
-> included in the platform-specific wheels published to
-> [PyPI](https://pypi.org/project/google-antigravity/). **Cloning this
-> repository alone is not sufficient to run the SDK.** Always install from
-> PyPI with `pip install google-antigravity` to obtain the binary.
+> The Google Antigravity SDK relies on a Go localharness binary communicating via WebSocket and Protobuf. Ensure the harness is correctly set up.
 
 ## Quickstart
 
@@ -25,262 +27,178 @@ Get started by running one of the [`examples/`](examples/), such as the
 
 ```sh
 export GEMINI_API_KEY="your_api_key_here"
-python ./examples/getting_started/hello_world.py
+cargo run --example hello_world
 ```
 ## Concepts
 
 ### Simple Agent
 
-The `Agent` class is the easiest way to get started. It manages the full
-lifecycle — binary discovery, tool wiring, hook registration, and policy
-defaults — behind a single async context manager.
+The `Agent` struct is the easiest way to get started. It manages the full
+lifecycle — tool wiring, hook registration, and policy defaults.
 
-The `system_instructions` parameter is optional.
+```rust
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::Agent;
+use std::error::Error;
 
-```python
-import asyncio
-from google.antigravity import Agent, LocalAgentConfig
-
-async def main():
-    config = LocalAgentConfig(
-        system_instructions="You are an expert assistant for codebase navigation.",
-        # api_key="your_api_key_here",
-    )
-    async with Agent(config) as agent:
-        response = await agent.chat("What files are in the current directory?")
-        print(await response.text())
-
-async def run():
-    await main()
-
-if __name__ == "__main__":
-    asyncio.run(run())
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let config = LocalAgentConfig::default();
+    let mut agent = Agent::new(config);
+    
+    agent.start().await?;
+    
+    let response = agent.chat("What files are in the current directory?").await?;
+    println!("{}", response.text().await);
+    
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 ### Streaming Responses
 
-To stream agent output in real-time (e.g., for fluid UI or console applications), simply iterate over the `ChatResponse` object using an `async for` loop. The stream wrapper natively yields conversational `str` text tokens as they arrive, with zero network overhead:
+To stream agent output in real-time (e.g., for fluid UI or console applications), simply consume the `ChatResponse` object which implements `futures::stream::Stream`:
 
-```python
-import asyncio
-import sys
-from google.antigravity import Agent, LocalAgentConfig
+```rust
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::Agent;
+use futures::StreamExt;
+use std::io::{self, Write};
 
-async def main():
-    config = LocalAgentConfig()
-    async with Agent(config) as agent:
-        # Returns instantly — does not block
-        response = await agent.chat("Write a short poem about space.")
-        
-        async for token in response:
-            sys.stdout.write(token)
-            sys.stdout.flush()
-        print()
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut agent = Agent::new(LocalAgentConfig::default());
+    agent.start().await?;
 
-asyncio.run(main())
-```
-
-### Sugared Thoughts & Tool Call Streams (Advanced)
-
-For more complex use cases, you can also stream internal model reasoning/thinking or intercept tool call dispatches in real-time using dedicated async stream properties:
-
-```python
-# 1. Stream reasoning/thinking deltas
-async for thought in response.thoughts:
-    show_thinking_bubble(thought)
-
-# 2. Stream strongly-typed ToolCall events
-async for call in response.tool_calls:
-    show_executing_spinner(call.name)
+    let mut response = agent.chat("Write a short poem about space.").await?;
+    
+    while let Some(chunk) = response.next().await {
+        print!("{}", chunk);
+        io::stdout().flush()?;
+    }
+    println!();
+    
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 By default, `Agent` runs in **read-only mode** for safety. Pass
-`capabilities=CapabilitiesConfig()` to enable all tools (including writes).
+`capabilities: CapabilitiesConfig::default()` to enable all tools (including writes).
 
 ### Interactive Loop
 
-```python
-from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
-from google.antigravity.utils.interactive import run_interactive_loop
+```rust
+use antigravity_sdk::connections::local::{LocalAgentConfig, CapabilitiesConfig};
+use antigravity_sdk::Agent;
+use antigravity_sdk::utils::interactive::run_interactive_loop;
 
-config = LocalAgentConfig(
-    # api_key="your_api_key_here",
-    capabilities=CapabilitiesConfig(),
-)
-async with Agent(config) as agent:
-    await run_interactive_loop(agent)
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut config = LocalAgentConfig::default();
+    config.capabilities = Some(CapabilitiesConfig::default());
+    
+    let mut agent = Agent::new(config);
+    agent.start().await?;
+    
+    run_interactive_loop(&mut agent).await?;
+    
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 ### Advanced Usage with Conversation
 
-For full control over the connection lifecycle, use `Conversation` with a
-`ConnectionStrategy` directly. `Conversation` is a stateful session that
-accumulates step history, provides a `chat()` convenience method, and exposes
-state introspection:
+For full control over the connection lifecycle, use `Conversation` directly:
 
-```python
-import asyncio
-from google.antigravity.connections.local import LocalConnectionStrategy
-from google.antigravity.conversation.conversation import Conversation
-from google.antigravity.tools.tool_runner import ToolRunner
-from google.antigravity.types import GeminiConfig
+```rust
+use antigravity_sdk::connections::local::LocalConnectionStrategy;
+use antigravity_sdk::conversation::Conversation;
+use antigravity_sdk::tools::tool_runner::ToolRunner;
 
-async def main():
-    tool_runner = ToolRunner()
-    strategy = LocalConnectionStrategy(
-        tool_runner=tool_runner,
-        # gemini_config=GeminiConfig(api_key="your_api_key_here"),
-    )
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let tool_runner = ToolRunner::new();
+    let mut strategy = LocalConnectionStrategy::new(
+        Default::default(),
+        tool_runner,
+        None,
+        None,
+    );
     
-    async with Conversation.create(strategy) as conversation:
-        # High-level: one-call send + collect
-        response = await conversation.chat("What files are here?")
-        print(await response.text())
-        
-        # Step history accumulates automatically
-        print(f"Total steps: {len(conversation.history)}")
-        print(f"Turns: {conversation.turn_count}")
-        print(f"Last response: {conversation.last_response}")
-        
-        # Low-level: streaming steps
-        await conversation.send("Tell me more.")
-        async for step in conversation.receive_steps():
-            if step.is_complete_response:
-                print(step.content)
-
-asyncio.run(main())
+    let mut conversation = Conversation::create(&mut strategy).await?;
+    
+    let response = conversation.chat("What files are here?").await?;
+    println!("{}", response.text().await);
+    
+    println!("Total steps: {}", conversation.history().await.len());
+    
+    conversation.disconnect().await?;
+    Ok(())
+}
 ```
 
 ## Features
 
-### Multimodal Ingestion
-
-Pass rich multimedia file attachments (images, videos, audio, and documents) to the agent alongside textual instruction prompt lists.
-
-You can attach assets **directly using content classes** (perfect for in-memory bytes) or **conveniently from a filesystem path** (which automatically resolves types and guesses MIME formats):
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import Image, from_file
-
-config = LocalAgentConfig(system_instructions="You are an expert software architect.")
-async with Agent(config) as agent:
-    # 1. Flat filesystem shortcut (automatically resolves as types.Document)
-    pdf_spec = from_file("spec.pdf")
-    
-    # 2. Direct constructor instantiation (perfect for in-memory raw bytes)
-    chart_image = Image(
-        data=b"raw_png_bytes_here", 
-        mime_type="image/png", 
-        description="Architecture blueprint"
-    )
-    
-    # Send a mixed list of text instructions and content classes
-    prompt = [
-        "Analyze this chart against the specification and list three security vulnerabilities:",
-        chart_image,
-        pdf_spec
-    ]
-    response = await agent.chat(prompt)
-    print(await response.text())
-```
-
 ### Custom Tools
 
-Register Python functions as tools that the agent can call:
+Register Rust closures or functions as tools that the agent can call using `RegisteredTool`:
 
-```python
-def get_weather(city: str) -> str:
-    """Returns the current weather for a city."""
-    return f"It's sunny in {city}."
+```rust
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::Agent;
+use antigravity_sdk::tools::tool_runner::{RegisteredTool, ToolRunner};
+use serde_json::json;
 
-config = LocalAgentConfig(
-    tools=[get_weather],
-)
-async with Agent(config) as agent:
-    response = await agent.chat("What's the weather in Tokyo?")
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut tool_runner = ToolRunner::new();
+    let _ = tool_runner.register(RegisteredTool {
+        name: "get_weather".to_string(),
+        description: "Returns the current weather for a city.".to_string(),
+        schema: Some(json!({
+            "type": "object",
+            "properties": {
+                "city": { "type": "string" }
+            },
+            "required": ["city"]
+        })),
+        handler: Box::new(|args| {
+            Box::pin(async move {
+                let city = args.get("city").unwrap().as_str().unwrap();
+                Ok(json!(format!("It's sunny in {}.", city)))
+            })
+        }),
+    });
+
+    let config = LocalAgentConfig::default();
+    let mut agent = Agent::new(config);
+    // Note: Tool Runner injection occurs automatically through hooks/config in advanced use
+    agent.start().await?;
+    agent.chat("What's the weather in Tokyo?").await?;
+    agent.stop().await?;
+    Ok(())
+}
 ```
 
 ### MCP Integration
 
-Connect to external [MCP](https://modelcontextprotocol.io/) servers and expose
-their tools to the agent:
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import McpStdioServer
-
-config = LocalAgentConfig(
-    mcp_servers=[McpStdioServer(command="npx", args=["my-mcp-server"])],
-)
-async with Agent(config) as agent:
-    response = await agent.chat("Use the MCP tools to help me.")
-```
+Connect to external [MCP](https://modelcontextprotocol.io/) servers and expose their tools to the agent natively using the `rmcp` crate integration.
 
 ### Hooks and Policies
 
-Control agent behavior with a declarative policy system:
-
-```python
-from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
-from google.antigravity.hooks.policy import deny, allow, ask_user, enforce
-from google.antigravity.utils.interactive import run_interactive_loop
-
-policies = [
-    deny("*"),                          # Block all tools by default
-    allow("view_file"),                 # Allow reading files
-    ask_user("run_command", handler=my_handler),  # Ask before running commands
-]
-
-config = LocalAgentConfig(
-    capabilities=CapabilitiesConfig(),
-    policies=policies,
-)
-async with Agent(config) as agent:
-    await run_interactive_loop(agent)
-```
-
-### Triggers
-
-Run background tasks that react to external events and push messages into the
-agent:
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.triggers import every
-from google.antigravity.utils.interactive import run_interactive_loop
-
-async def check_status(ctx):
-    await ctx.send("Check the deployment status.")
-
-config = LocalAgentConfig(
-    triggers=[every(60, check_status)],
-)
-async with Agent(config) as agent:
-    await run_interactive_loop(agent)
-```
-
-## Architecture
-
-The SDK follows a three-layer architecture:
-
-| Layer | Purpose | Key Classes |
-|:------|:--------|:------------|
-| **Layer 1** — Simplified | High-level, batteries-included entry point | `Agent` |
-| **Layer 2** — Session | Stateful session with history and convenience methods | `Conversation`, `ChatResponse`, `Step`, `ToolCall`, `AgentConfig`, `HookRunner`, `ToolRunner`, `TriggerRunner` |
-| **Layer 3** — Adapter | Transport and backend abstraction | `Connection`, `ConnectionStrategy`, `LocalConnection` |
+Control agent behavior with a declarative policy system inside the `HookRunner` or via `AgentConfig`.
 
 ## Component Documentation
 
-For more detailed documentation on specific components, see:
+For more detailed documentation, see the deep-dive guides:
 
--   [Agent](google/antigravity/agent.py) — High-level, batteries-included entry point.
--   [Connections](google/antigravity/connections/README.md) — Transport and backend abstraction.
--   [Conversation](google/antigravity/conversation/README.md) — Stateful session management.
--   [Hooks](google/antigravity/hooks/README.md) — Agent lifecycle interception and policies.
--   [MCP](google/antigravity/mcp/README.md) — Model Context Protocol integration.
--   [Tools](google/antigravity/tools/README.md) — In-process tool execution.
--   [Triggers](google/antigravity/triggers/README.md) — Background tasks and external events.
+- [Getting Started](docs/01_getting_started.md) — Basics and Setup
+- [Core Concepts](docs/02_core_concepts.md) — Agent, Conversation, Streaming
+- [Advanced Usage](docs/03_advanced_usage.md) — Custom Tools, MCP, Policies, Triggers
+- [Architecture](docs/04_architecture.md) — Under the hood of the Rust implementation
 
 ## License
 

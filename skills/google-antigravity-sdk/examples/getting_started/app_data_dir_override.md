@@ -1,29 +1,38 @@
-# Application Data Directory Override
+# Example demonstrating app_data_dir override (Rust).
 
-This example demonstrates how to override the default application data directory
-(`app_data_dir`) in `LocalAgentConfig` to control where the agent stores
-generated artifacts (like `task.md`), scratch files, and media on disk.
+To run:
+  cargo run --example app_data_dir_override
 
-## Overriding Artifact Storage
+```rust
+//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-By default, the agent writes artifacts and scratch files to
-`~/.gemini/antigravity/brain/`. You can customize this by providing a path.
-
-> [!IMPORTANT] **The path must be an absolute path.** Passing relative paths or
-> unexpanded tildes (`~/`) will trigger a validation error.
-
-```python
-import tempfile
-from google.antigravity import Agent, LocalAgentConfig
-
-# Create a custom directory for application data storage
-custom_app_data = tempfile.mkdtemp()
-
-config = LocalAgentConfig(
-    app_data_dir=custom_app_data,
-)
-
-async with Agent(config) as agent:
-    # Generated artifacts and scratch files will be saved inside custom_app_data
-    await agent.chat("Create an artifact named 'notes.md' summarizing this conversation.")
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use tempfile::tempdir;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let temp_dir_obj = tempdir()?;
+    let custom_dir = temp_dir_obj.path().to_string_lossy().to_string();
+    let _config = LocalAgentConfig {
+        app_data_dir: Some(custom_dir.clone()),
+        ..Default::default()
+    };
+    println!("  === App Data Dir Override Demo ===");
+    println!("  Custom app_data_dir: {custom_dir}");
+    let mut agent = Agent::new(Default::default());
+    agent.start().await?;
+    println!("  Agent: Using custom app data directory.");
+    agent.stop().await?;
+    Ok(())
+}
 ```

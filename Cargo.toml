@@ -1,0 +1,158 @@
+[package]
+name = "antigravity-sdk"
+version = "0.1.0"
+edition = "2024"
+description = "Google Antigravity SDK for building AI agents — Rust edition"
+license = "Apache-2.0"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Protobuf (JSON wire format used by Go harness)
+prost = "0.13"
+prost-types = "0.13"
+
+# WebSocket client (connects to Go localharness)
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+
+# HTTP client (for MCP SSE/Streamable HTTP connections)
+reqwest = { version = "0.13", features = ["json", "stream"] }
+
+# JSON Schema generation (for tool definitions)
+schemars = "0.8"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File watching (for on_file_change trigger)
+notify = "7"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# URL parsing
+url = "2"
+
+# Base64 encoding for media payloads
+base64 = "0.22"
+rmcp = { version = "1.7.0", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
+
+[build-dependencies]
+prost-build = "0.13"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+
+[[example]]
+name = "agent_skills"
+path = "examples/getting_started/agent_skills.rs"
+
+[[example]]
+name = "app_data_dir_override"
+path = "examples/getting_started/app_data_dir_override.rs"
+
+[[example]]
+name = "autonomous_shell"
+path = "examples/getting_started/autonomous_shell.rs"
+
+[[example]]
+name = "custom_tools"
+path = "examples/getting_started/custom_tools.rs"
+
+[[example]]
+name = "error_handler"
+path = "examples/getting_started/error_handler.rs"
+
+[[example]]
+name = "hello_world"
+path = "examples/getting_started/hello_world.rs"
+
+[[example]]
+name = "hooks"
+path = "examples/getting_started/hooks.rs"
+
+[[example]]
+name = "human_in_the_loop"
+path = "examples/getting_started/human_in_the_loop.rs"
+
+[[example]]
+name = "mcp_tools"
+path = "examples/getting_started/mcp_tools.rs"
+
+[[example]]
+name = "multimodal"
+path = "examples/getting_started/multimodal.rs"
+
+[[example]]
+name = "observability"
+path = "examples/getting_started/observability.rs"
+
+[[example]]
+name = "persistence"
+path = "examples/getting_started/persistence.rs"
+
+[[example]]
+name = "persona_config"
+path = "examples/getting_started/persona_config.rs"
+
+[[example]]
+name = "policies"
+path = "examples/getting_started/policies.rs"
+
+[[example]]
+name = "streaming"
+path = "examples/getting_started/streaming.rs"
+
+[[example]]
+name = "structured_output"
+path = "examples/getting_started/structured_output.rs"
+
+[[example]]
+name = "subagents"
+path = "examples/getting_started/subagents.rs"
+
+[[example]]
+name = "triggers"
+path = "examples/getting_started/triggers.rs"
+
+[[example]]
+name = "agent_middleware"
+path = "examples/deep_dives/agent_middleware.rs"
+
+[[example]]
+name = "async_chat"
+path = "examples/deep_dives/async_chat.rs"
+
+[[example]]
+name = "doc_maintenance_agent"
+path = "examples/deep_dives/doc_maintenance_agent.rs"
+
+[[example]]
+name = "docstring_maintenance_agent"
+path = "examples/deep_dives/docstring_maintenance_agent.rs"
+
+[[example]]
+name = "host_tool_hooks"
+path = "examples/deep_dives/host_tool_hooks.rs"
+
+[[example]]
+name = "interactive_cli"
+path = "examples/deep_dives/interactive_cli.rs"
+
+[[example]]
+name = "multimodal_pipeline"
+path = "examples/deep_dives/multimodal_pipeline.rs"
+
+[[example]]
+name = "round_based_chat"
+path = "examples/deep_dives/round_based_chat.rs"

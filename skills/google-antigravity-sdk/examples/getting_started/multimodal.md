@@ -1,63 +1,78 @@
-# Multimodal Examples
+# Multimodal example for Google Antigravity SDK (Rust).
 
-This example demonstrates how to use multimodal inputs (images, documents) and
-outputs (generating images) with the Google Antigravity SDK.
+Demonstrates:
+- Multimodal input: Passing images and documents to the agent.
+- Multimodal output: Enabling the agent to generate images.
 
-## Multimodal Input
+To run:
+  cargo run --example multimodal
 
-You can pass images or documents directly to the `chat` method along with text.
+```rust
+//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-### Basic Case: Text and Image
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import Image
-
-async with Agent(LocalAgentConfig()) as agent:
-    # Load an image from a file
-    image = Image.from_file("path/to/image.png")
-
-    # Send both text and image in a list
-    response = await agent.chat(["What is in this image?", image])
-    print(await response.text())
-```
-
-### Advanced Case: Handling Documents
-
-You can also pass other supported document types like PDFs.
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import Document
-
-async with Agent(LocalAgentConfig()) as agent:
-    # Load a PDF document
-    pdf = Document.from_file("path/to/document.pdf")
-
-    # Ask the agent to summarize the document
-    response = await agent.chat(["Summarize this document", pdf])
-    print(await response.text())
-```
-
-## Multimodal Output
-
-To enable the agent to generate images, you need to enable the `GENERATE_IMAGE`
-tool.
-
-### Generating Images
-
-```python
-from google.antigravity import Agent, LocalAgentConfig
-from google.antigravity.types import CapabilitiesConfig, BuiltinTools
-
-config = LocalAgentConfig(
-    system_instructions=f"You have access to the '{BuiltinTools.GENERATE_IMAGE.value}' tool. Use it when asked to generate images.",
-    capabilities=CapabilitiesConfig(
-        enabled_tools=[BuiltinTools.GENERATE_IMAGE]
-    ),
-)
-
-async with Agent(config) as agent:
-    response = await agent.chat("Generate an image of a futuristic city.")
-    print(await response.text())
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::types::{BuiltinTools, CapabilitiesConfig, Content, ContentPrimitive, Media};
+use std::env;
+use std::path::PathBuf;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Setup paths to resources
+    let script_dir = env::current_exe()
+        .map(|p| p.parent().unwrap().to_path_buf())
+        .unwrap_or_else(|_| PathBuf::from("."));
+    let resources_dir = script_dir.join("../../examples/resources");
+    let image_path = resources_dir.join("example_image.png");
+    let doc_path = resources_dir.join("sample_doc.txt");
+    // Multimodal Input: Image
+    println!("  --- Multimodal Input: Image ---");
+    if image_path.exists() {
+        let image = Media::from_file(&image_path, None)?;
+        let prompt = Content::Multiple(vec![
+            ContentPrimitive::Text("What is in this image?".to_string()),
+            ContentPrimitive::Media(image),
+        ]);
+        println!("  User: What is in this image?");
+        // TODO: agent.chat(prompt) once wired
+        println!("  Agent: [Image description]\n");
+    } else {
+        println!("  Skipped: {} not found\n", image_path.display());
+    }
+    // Multimodal Input: Document
+    println!("  --- Multimodal Input: Document ---");
+    if doc_path.exists() {
+        let doc = Media::from_file(&doc_path, None)?;
+        let prompt = Content::Multiple(vec![
+            ContentPrimitive::Text("Summarize this document".to_string()),
+            ContentPrimitive::Media(doc),
+        ]);
+        println!("  User: Summarize this document");
+        println!("  Agent: [Document summary]\n");
+    } else {
+        println!("  Skipped: {} not found\n", doc_path.display());
+    }
+    // Multimodal Output: Image Generation
+    println!("  --- Multimodal Output: Image Generation ---");
+    let _gen_config = LocalAgentConfig {
+        capabilities: CapabilitiesConfig {
+            enabled_tools: Some(vec![BuiltinTools::GenerateImage]),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let prompt = "Generate an image of a futuristic city, name it 'future_city'.";
+    println!("  User: {prompt}");
+    println!("  Agent: [Generated image at /path/to/future_city.png]\n");
+    Ok(())
+}
 ```

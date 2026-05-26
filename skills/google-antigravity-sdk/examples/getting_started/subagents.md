@@ -1,34 +1,75 @@
-# Subagents Example
+# Example demonstrating subagents in Google Antigravity SDK (Rust).
 
-This example demonstrates how an agent can spawn and delegate tasks to
-sub-agents using the Google Antigravity SDK.
+Shows how an agent can spawn a subagent to delegate a specific task.
 
-## Spawning a Subagent
+To run:
+  cargo run --example subagents
 
-To allow an agent to spawn subagents, you need to enable them in the
-`CapabilitiesConfig`. By default, subagents are enabled.
+```rust
+//
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Here is a minimal example of an agent spawning a subagent to perform a specific
-task.
-
-```python
-from google.antigravity import Agent, LocalAgentConfig, types
-
-# Enable subagents in the config
-config = LocalAgentConfig(
-    capabilities=types.CapabilitiesConfig(
-        enable_subagents=True,
-    )
-)
-
-async with Agent(config) as agent:
-    # Prompt the agent to use a subagent
-    response = await agent.chat("Use a subagent to write a short poem about nature.")
-    print(await response.text())
+use antigravity_sdk::Agent;
+use antigravity_sdk::connections::local::LocalAgentConfig;
+use antigravity_sdk::hooks::{DecideHook, HookContext, HookRunner, InspectHook};
+use antigravity_sdk::types::{
+    BuiltinTools, CapabilitiesConfig, HookResult, ToolCall, ToolName, ToolResult,
+};
+use async_trait::async_trait;
+struct LogPreToolHook;
+#[async_trait]
+impl DecideHook<ToolCall> for LogPreToolHook {
+    async fn run(&self, _ctx: &mut HookContext, data: &ToolCall) -> HookResult {
+        if data.name == ToolName::Builtin(BuiltinTools::StartSubagent) {
+            println!("\n  --- 🤖 [Hook] Spawning Subagent ---");
+            println!("  Arguments: {:?}\n", data.args);
+        } else {
+            println!("  - [Start]: {} (ID: {:?})", data.name, data.id);
+        }
+        HookResult::allowed()
+    }
+}
+struct LogPostToolHook;
+#[async_trait]
+impl InspectHook<ToolResult> for LogPostToolHook {
+    async fn run(&self, _ctx: &mut HookContext, data: &ToolResult) {
+        if data.name == ToolName::Builtin(BuiltinTools::StartSubagent) {
+            println!("\n  --- 🤖 [Hook] Subagent Finished ---");
+            println!("  Result: {:?}\n", data.result);
+        } else {
+            println!("  - [Done]: {} (ID: {:?}) ✅", data.name, data.id);
+        }
+    }
+}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let _config = LocalAgentConfig {
+        capabilities: CapabilitiesConfig {
+            enable_subagents: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut agent = Agent::new(Default::default());
+    agent.start().await?;
+    let prompt = concat!(
+        "Use a subagent to research the Google Antigravity SDK examples in the parent ",
+        "directory. Delegate the task of listing and reading the files to the ",
+        "subagent, and then generate a lesson plan for me to learn more based ",
+        "on its findings."
+    );
+    println!("  User: {prompt}");
+    println!("\n  Agent: [Lesson plan based on subagent research]");
+    agent.stop().await?;
+    Ok(())
+}
 ```
-
-## Consuming Subagent Output
-
-The result from the subagent is typically delivered back to the main agent,
-which then presents it or uses it. The `await response.text()` call will return
-the final aggregated response, including the output produced by the subagent.
