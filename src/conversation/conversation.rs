@@ -25,6 +25,7 @@ use crate::types::{
     StreamChunk, Text, Thought, UsageMetadata,
 };
 use futures::{Stream, StreamExt};
+use im::Vector;
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -34,10 +35,11 @@ use tokio::sync::RwLock;
 /// Manages conversation state, history, and metadata.
 pub struct Conversation {
     connection: Arc<dyn Connection>,
-    history: RwLock<Vec<Step>>,
-    turn_start_indices: RwLock<Vec<usize>>,
+    /// Conversation history using persistent data structure for O(1) clone.
+    history: RwLock<Vector<Step>>,
+    turn_start_indices: RwLock<Vector<usize>>,
     max_history_size: Option<usize>,
-    compaction_indices: RwLock<Vec<usize>>,
+    compaction_indices: RwLock<Vector<usize>>,
     cumulative_usage: RwLock<Option<UsageMetadata>>,
     last_turn_usage: RwLock<Option<UsageMetadata>>,
 }
@@ -47,10 +49,10 @@ impl Conversation {
     pub fn new(connection: Arc<dyn Connection>) -> Self {
         Self {
             connection,
-            history: RwLock::new(Vec::new()),
-            turn_start_indices: RwLock::new(Vec::new()),
+            history: RwLock::new(Vector::new()),
+            turn_start_indices: RwLock::new(Vector::new()),
             max_history_size: None,
-            compaction_indices: RwLock::new(Vec::new()),
+            compaction_indices: RwLock::new(Vector::new()),
             cumulative_usage: RwLock::new(None),
             last_turn_usage: RwLock::new(None),
         }
@@ -67,7 +69,9 @@ impl Conversation {
     }
 
     /// Returns the conversation history.
-    pub async fn history(&self) -> Vec<Step> {
+    ///
+    /// Uses `im::Vector` internally — clone is O(1) regardless of history size.
+    pub async fn history(&self) -> Vector<Step> {
         self.history.read().await.clone()
     }
 
@@ -77,7 +81,7 @@ impl Conversation {
     }
 
     /// Returns the compaction indices.
-    pub async fn compaction_indices(&self) -> Vec<usize> {
+    pub async fn compaction_indices(&self) -> Vector<usize> {
         self.compaction_indices.read().await.clone()
     }
 
@@ -87,9 +91,12 @@ impl Conversation {
     }
 
     /// Gets the last structured output from the history, if any.
+    ///
+    /// Scans history backward using iterator combinators (FP style).
     pub async fn get_last_structured_output(&self) -> Option<serde_json::Value> {
-        let history = self.history.read().await;
-        history
+        self.history
+            .read()
+            .await
             .iter()
             .rev()
             .find(|s| s.r#type == StepType::Finish)
@@ -101,45 +108,19 @@ impl Conversation {
         // Track compaction indices
         if step.r#type == StepType::Compaction {
             let len = self.history.read().await.len();
-            self.compaction_indices.write().await.push(len);
+            self.compaction_indices.write().await.push_back(len);
         }
 
-        // Accumulate usage metadata
+        // Accumulate usage metadata using pure merge function
         if let Some(ref usage) = step.usage_metadata {
             let mut last = self.last_turn_usage.write().await;
-            if let Some(ref mut existing) = *last {
-                existing.prompt_token_count =
-                    add_option(existing.prompt_token_count, usage.prompt_token_count);
-                existing.candidates_token_count = add_option(
-                    existing.candidates_token_count,
-                    usage.candidates_token_count,
-                );
-                existing.thoughts_token_count =
-                    add_option(existing.thoughts_token_count, usage.thoughts_token_count);
-                existing.total_token_count =
-                    add_option(existing.total_token_count, usage.total_token_count);
-            } else {
-                *last = Some(usage.clone());
-            }
+            *last = Some(merge_usage(last.as_ref(), usage));
 
             let mut cum = self.cumulative_usage.write().await;
-            if let Some(ref mut existing) = *cum {
-                existing.prompt_token_count =
-                    add_option(existing.prompt_token_count, usage.prompt_token_count);
-                existing.candidates_token_count = add_option(
-                    existing.candidates_token_count,
-                    usage.candidates_token_count,
-                );
-                existing.thoughts_token_count =
-                    add_option(existing.thoughts_token_count, usage.thoughts_token_count);
-                existing.total_token_count =
-                    add_option(existing.total_token_count, usage.total_token_count);
-            } else {
-                *cum = Some(usage.clone());
-            }
+            *cum = Some(merge_usage(cum.as_ref(), usage));
         }
 
-        self.history.write().await.push(step);
+        self.history.write().await.push_back(step);
     }
 
     /// Resets the turn-level usage metadata (called at the start of each turn).
@@ -155,14 +136,16 @@ impl Conversation {
         self.cumulative_usage.read().await.clone()
     }
 
+    /// Scans history backward for the last complete response (FP combinator style).
     pub async fn last_response(&self) -> String {
-        let history = self.history.read().await;
-        for step in history.iter().rev() {
-            if step.is_complete_response == Some(true) {
-                return step.content.clone();
-            }
-        }
-        String::new()
+        self.history
+            .read()
+            .await
+            .iter()
+            .rev()
+            .find(|s| s.is_complete_response == Some(true))
+            .map(|s| s.content.clone())
+            .unwrap_or_default()
     }
 
     pub async fn clear_history(&self) {
@@ -173,6 +156,9 @@ impl Conversation {
         *self.last_turn_usage.write().await = None;
     }
 
+    /// Trims history to max_size, adjusting all index vectors.
+    ///
+    /// Uses `im::Vector::split_off` which is O(log n) — structurally shared.
     pub async fn enforce_max_history(&self) {
         if let Some(max_size) = self.max_history_size {
             let mut history = self.history.write().await;
@@ -181,16 +167,18 @@ impl Conversation {
                 *history = history.split_off(overflow);
 
                 let mut turn_indices = self.turn_start_indices.write().await;
-                turn_indices.retain(|&i| i >= overflow);
-                for i in turn_indices.iter_mut() {
-                    *i -= overflow;
-                }
+                *turn_indices = turn_indices
+                    .iter()
+                    .filter(|&&i| i >= overflow)
+                    .map(|i| i - overflow)
+                    .collect();
 
                 let mut compaction = self.compaction_indices.write().await;
-                compaction.retain(|&i| i >= overflow);
-                for i in compaction.iter_mut() {
-                    *i -= overflow;
-                }
+                *compaction = compaction
+                    .iter()
+                    .filter(|&&i| i >= overflow)
+                    .map(|i| i - overflow)
+                    .collect();
             }
         }
     }
@@ -200,7 +188,7 @@ impl Conversation {
         self.turn_start_indices
             .write()
             .await
-            .push(self.history.read().await.len());
+            .push_back(self.history.read().await.len());
         Ok(())
     }
 
@@ -299,6 +287,29 @@ fn add_option(a: Option<i32>, b: Option<i32>) -> Option<i32> {
         (Some(a), None) => Some(a),
         (None, Some(b)) => Some(b),
         (None, None) => None,
+    }
+}
+
+/// Pure function: merges new usage data into an existing accumulator.
+///
+/// This is a key FP pattern — stateless transformation extracted from `push_step()`,
+/// eliminating code duplication and making the logic independently testable.
+fn merge_usage(existing: Option<&UsageMetadata>, new: &UsageMetadata) -> UsageMetadata {
+    match existing {
+        Some(e) => UsageMetadata {
+            prompt_token_count: add_option(e.prompt_token_count, new.prompt_token_count),
+            cached_content_token_count: add_option(
+                e.cached_content_token_count,
+                new.cached_content_token_count,
+            ),
+            candidates_token_count: add_option(
+                e.candidates_token_count,
+                new.candidates_token_count,
+            ),
+            thoughts_token_count: add_option(e.thoughts_token_count, new.thoughts_token_count),
+            total_token_count: add_option(e.total_token_count, new.total_token_count),
+        },
+        None => new.clone(),
     }
 }
 
@@ -441,7 +452,7 @@ mod tests {
         conv.push_step(make_compaction_step()).await; // index 1 → compaction at index 1
         conv.push_step(make_text_step("b")).await; // index 2
         let indices = conv.compaction_indices().await;
-        assert_eq!(indices, vec![1]);
+        assert_eq!(indices, Vector::from(vec![1]));
     }
 
     #[tokio::test]
@@ -491,6 +502,57 @@ mod tests {
         assert_eq!(add_option(Some(10), None), Some(10));
         assert_eq!(add_option(None, Some(20)), Some(20));
         assert_eq!(add_option(None, None), None);
+    }
+
+    #[test]
+    fn test_merge_usage_from_none() {
+        let new = UsageMetadata {
+            prompt_token_count: Some(100),
+            candidates_token_count: Some(50),
+            total_token_count: Some(150),
+            ..Default::default()
+        };
+        let result = merge_usage(None, &new);
+        assert_eq!(result.prompt_token_count, Some(100));
+        assert_eq!(result.candidates_token_count, Some(50));
+        assert_eq!(result.total_token_count, Some(150));
+    }
+
+    #[test]
+    fn test_merge_usage_accumulates() {
+        let existing = UsageMetadata {
+            prompt_token_count: Some(100),
+            candidates_token_count: Some(50),
+            total_token_count: Some(150),
+            ..Default::default()
+        };
+        let new = UsageMetadata {
+            prompt_token_count: Some(200),
+            candidates_token_count: Some(75),
+            total_token_count: Some(275),
+            ..Default::default()
+        };
+        let result = merge_usage(Some(&existing), &new);
+        assert_eq!(result.prompt_token_count, Some(300));
+        assert_eq!(result.candidates_token_count, Some(125));
+        assert_eq!(result.total_token_count, Some(425));
+    }
+
+    #[test]
+    fn test_merge_usage_is_pure() {
+        // Verify the function doesn't mutate its inputs
+        let existing = UsageMetadata {
+            prompt_token_count: Some(100),
+            ..Default::default()
+        };
+        let new = UsageMetadata {
+            prompt_token_count: Some(50),
+            ..Default::default()
+        };
+        let _result = merge_usage(Some(&existing), &new);
+        // Inputs unchanged — pure function guarantee
+        assert_eq!(existing.prompt_token_count, Some(100));
+        assert_eq!(new.prompt_token_count, Some(50));
     }
 
     // ... existing test setup ...

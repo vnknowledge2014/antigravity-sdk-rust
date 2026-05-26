@@ -42,6 +42,9 @@ anyhow = "1"
 # URL parsing
 url = "2"
 
+# Persistent (immutable) data structures — O(1) clone for conversation history
+im = "15"
+
 # Base64 encoding for media payloads
 base64 = "0.22"
 rmcp = { version = "1.7.0", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
