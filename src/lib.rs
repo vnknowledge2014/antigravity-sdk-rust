@@ -24,9 +24,11 @@
 // Enforce zero unsafe code at compile time.
 #![forbid(unsafe_code)]
 
+pub mod actors;
 pub mod agent;
 pub mod connections;
 pub mod conversation;
+pub mod core;
 pub mod hooks;
 pub mod mcp;
 pub mod tools;

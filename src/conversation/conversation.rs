@@ -20,6 +20,7 @@
 //! Corresponds to Python's `conversation/conversation.py`.
 
 use crate::connections::Connection;
+use crate::core::step_core;
 use crate::types::{
     AntigravityConnectionError, ChatResponse, Content, Step, StepSource, StepTarget, StepType,
     StreamChunk, Text, Thought, UsageMetadata,
@@ -280,37 +281,14 @@ impl Conversation {
     }
 }
 
-/// Adds two Option<i32> values, treating None as absent.
+/// Delegates to [`step_core::add_option`] — canonical Functional Core location.
 fn add_option(a: Option<i32>, b: Option<i32>) -> Option<i32> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(a + b),
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (None, None) => None,
-    }
+    step_core::add_option(a, b)
 }
 
-/// Pure function: merges new usage data into an existing accumulator.
-///
-/// This is a key FP pattern — stateless transformation extracted from `push_step()`,
-/// eliminating code duplication and making the logic independently testable.
+/// Delegates to [`step_core::merge_usage`] — canonical Functional Core location.
 fn merge_usage(existing: Option<&UsageMetadata>, new: &UsageMetadata) -> UsageMetadata {
-    match existing {
-        Some(e) => UsageMetadata {
-            prompt_token_count: add_option(e.prompt_token_count, new.prompt_token_count),
-            cached_content_token_count: add_option(
-                e.cached_content_token_count,
-                new.cached_content_token_count,
-            ),
-            candidates_token_count: add_option(
-                e.candidates_token_count,
-                new.candidates_token_count,
-            ),
-            thoughts_token_count: add_option(e.thoughts_token_count, new.thoughts_token_count),
-            total_token_count: add_option(e.total_token_count, new.total_token_count),
-        },
-        None => new.clone(),
-    }
+    step_core::merge_usage(existing, new)
 }
 
 #[cfg(test)]

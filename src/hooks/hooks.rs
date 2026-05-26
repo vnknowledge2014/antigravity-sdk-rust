@@ -68,6 +68,17 @@ pub struct TurnContext {
     pub metadata: HashMap<String, String>,
 }
 
+impl Default for TurnContext {
+    fn default() -> Self {
+        Self {
+            ctx: HookContext::new(),
+            turn_id: String::new(),
+            step_count: 0,
+            metadata: HashMap::new(),
+        }
+    }
+}
+
 impl TurnContext {
     pub fn new(_session: &SessionContext) -> Self {
         Self {

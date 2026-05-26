@@ -1,4 +1,3 @@
-use prost::Message;
 // Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,13 +20,12 @@ use prost::Message;
 // Corresponds to Python's `local_connection.py`.
 
 use async_trait::async_trait;
-use futures::StreamExt;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+use tokio::io::AsyncBufReadExt;
 use tokio::process::Child;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -35,6 +33,7 @@ use tracing::{info, warn};
 
 use crate::connections::wire_types::localharness::*;
 use crate::connections::{Connection, ConnectionStrategy};
+use crate::core::tool_core;
 use crate::hooks::{HookRunner, OperationContext, TurnContext};
 use crate::tools::ToolRunner;
 use crate::types::{self, *};
@@ -284,82 +283,105 @@ impl LocalConnection {
 
     async fn handle_tool_call(
         &self,
-        tool_call: crate::connections::wire_types::localharness::ToolCall,
+        wire_tc: crate::connections::wire_types::localharness::ToolCall,
     ) {
-        let _args: HashMap<String, serde_json::Value> =
-            serde_json::from_str(&tool_call.arguments_json.clone().unwrap_or_default())
-                .unwrap_or_default();
-        let tc = crate::types::ToolCall {
-            id: tool_call.id.clone(),
-            name: types::ToolName::Custom(tool_call.name.clone().unwrap_or_default()),
-            args: serde_json::from_str(&tool_call.arguments_json.clone().unwrap_or_default())
-                .unwrap_or_default(),
-            canonical_path: None,
+        // Step 1: Parse (pure)
+        let tc = match tool_core::parse_wire_tool_call(
+            wire_tc.id.clone(),
+            wire_tc.name.clone(),
+            wire_tc.arguments_json.clone(),
+        ) {
+            Ok(tc) => tc,
+            Err(e) => {
+                warn!("Failed to parse wire tool call: {}", e);
+                return;
+            }
         };
 
-        let mut allow = true;
-        let mut err_msg = String::new();
-        let mut op_context_opt = None;
+        // Step 2: Policy check (async, may deny)
+        let (allowed, deny_msg, op_ctx) = self.check_tool_policy(&tc).await;
 
-        if let Some(hr) = &self.hook_runner {
-            let mut guard = self.current_turn_context.lock().await;
-            if guard.is_none() {
-                *guard = Some(self._get_turn_context());
-            }
-            let (res, op_ctx) = hr
-                .dispatch_pre_tool_call(guard.as_ref().unwrap(), &tc)
-                .await;
-            allow = res.allow;
-            err_msg = if res.message.is_empty() {
-                "No reason provided".to_string()
-            } else {
-                res.message.clone()
-            };
-            op_context_opt = Some(op_ctx);
-        }
-
-        if !allow {
-            let _ = self
-                .send_tool_results(vec![ToolResult {
-                    id: tool_call.id.clone(),
-                    name: types::ToolName::Custom(tool_call.name.clone().unwrap_or_default()),
-                    result: None,
-                    error: Some(format!("Tool execution denied by hook policy: {}", err_msg)),
-                }])
-                .await;
+        if !allowed {
+            let msg = tool_core::effective_deny_message(&deny_msg);
+            let denial = tool_core::build_denial_result(&tc, msg);
+            let _ = self.send_tool_results(vec![denial]).await;
             return;
         }
 
-        if let Some(tr) = &self.tool_runner {
-            let results = tr.process_tool_calls(&[tc.clone()]).await;
-            if let Some(mut result) = results.into_iter().next() {
-                result.id = tool_call.id.clone();
+        // Step 3: Execute tool + post-process hooks (async)
+        let result = self.execute_and_post_process(&tc, op_ctx).await;
 
-                if let Some(hr) = &self.hook_runner {
-                    let mut op_context = op_context_opt
-                        .unwrap_or_else(|| OperationContext::new(&self._get_turn_context()));
-                    if result.error.is_some() {
-                        let e = std::io::Error::other(
-                            result.error.clone().unwrap(),
-                        );
-                        let (rec_res, rec_val) = hr
-                            .dispatch_on_tool_error(&mut op_context, Box::new(e))
-                            .await;
-                        if rec_res.allow && rec_val.is_some() {
-                            result.error = None;
-                            result.result = rec_val;
-                        }
-                    } else {
-                        hr.dispatch_post_tool_call(&mut op_context, &result).await;
-                    }
-                }
-                let _ = self.send_tool_results(vec![result]).await;
-            }
-        } else {
-            warn!("Received tool call but no tool runner is configured");
+        // Step 4: Send result
+        if let Some(result) = result {
+            let _ = self.send_tool_results(vec![result]).await;
         }
     }
+
+    /// Encapsulates the hook_runner pre-tool-call policy check.
+    ///
+    /// Returns `(allowed, deny_message, optional_op_context)`.
+    async fn check_tool_policy(
+        &self,
+        tc: &crate::types::ToolCall,
+    ) -> (bool, String, Option<OperationContext>) {
+        let hr = match &self.hook_runner {
+            Some(hr) => hr,
+            None => return (true, String::new(), None),
+        };
+
+        let mut guard = self.current_turn_context.lock().await;
+        if guard.is_none() {
+            *guard = Some(self._get_turn_context());
+        }
+
+        let (res, op_ctx) = hr
+            .dispatch_pre_tool_call(guard.as_ref().unwrap(), tc)
+            .await;
+
+        (res.allow, res.message.clone(), Some(op_ctx))
+    }
+
+    /// Encapsulates tool execution and post-execution hook dispatch.
+    ///
+    /// Runs the tool via `tool_runner`, then dispatches either `on_tool_error`
+    /// (with `resolve_tool_result` for recovery) or `post_tool_call` hooks.
+    async fn execute_and_post_process(
+        &self,
+        tc: &crate::types::ToolCall,
+        op_ctx: Option<OperationContext>,
+    ) -> Option<ToolResult> {
+        let tr = match &self.tool_runner {
+            Some(tr) => tr,
+            None => {
+                warn!("Received tool call but no tool runner is configured");
+                return None;
+            }
+        };
+
+        let results = tr.process_tool_calls(&[tc.clone()]).await;
+        let mut result = results.into_iter().next()?;
+        result.id = tc.id.clone();
+
+        if let Some(hr) = &self.hook_runner {
+            let mut op_context =
+                op_ctx.unwrap_or_else(|| OperationContext::new(&self._get_turn_context()));
+
+            if result.error.is_some() {
+                let e = std::io::Error::other(result.error.clone().unwrap());
+                let (rec_res, rec_val) = hr
+                    .dispatch_on_tool_error(&mut op_context, Box::new(e))
+                    .await;
+                let recovery = if rec_res.allow { rec_val } else { None };
+                result = tool_core::resolve_tool_result(result, recovery);
+            } else {
+                hr.dispatch_post_tool_call(&mut op_context, &result).await;
+            }
+        }
+
+        Some(result)
+    }
 }
+
 
 #[async_trait]
 impl Connection for LocalConnection {
