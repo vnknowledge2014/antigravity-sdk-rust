@@ -140,6 +140,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 ```
 
+## Architecture
+
+The SDK follows a state-of-the-art **Functional Programming** architecture:
+
+- **Railway Oriented Programming (ROP)**: Pipeline-based error handling with `Pipeline<T>` and `PipelineError`
+- **Functional Core – Imperative Shell**: Pure functions in `src/core/`, IO at boundaries
+- **Actor Model**: Zero-lock concurrency via `StateActor` and `WriterActor` (replaces `Arc<Mutex<...>>`)
+- **Event Sourcing**: `AgentPhase` state machine + `AgentEvent` append-only log
+
+For detailed architecture documentation, see [FP Architecture](docs/05_fp_architecture.md).
+
 ## Features
 
 ### Custom Tools
@@ -199,6 +210,7 @@ For more detailed documentation, see the deep-dive guides:
 - [Core Concepts](docs/02_core_concepts.md) — Agent, Conversation, Streaming
 - [Advanced Usage](docs/03_advanced_usage.md) — Custom Tools, MCP, Policies, Triggers
 - [Architecture](docs/04_architecture.md) — Under the hood of the Rust implementation
+- [FP Architecture](docs/05_fp_architecture.md) — Railway Oriented Programming, Actor Model, Event Sourcing
 
 ## License
 

@@ -35,13 +35,44 @@ Tất cả mã nguồn của SDK này bị ép buộc sử dụng macro:
 ```
 Tuyệt đối không có bất kỳ rủi ro nào liên quan đến lỗi rò rỉ bộ nhớ từ việc ép kiểu trực tiếp (như thường thấy ở các SDK C/C++ FFI). 
 
-Để chia sẻ tài nguyên an toàn giữa các luồng (ví dụ: `Trigger` chạy ngầm, `Conversation` chạy chính, và `WebSocket` lắng nghe liên tục), chúng tôi sử dụng `Arc<Mutex<T>>` và `tokio::spawn` để kiểm soát concurrency cực kỳ chặt chẽ.
+> [!NOTE]
+> Mô hình `Arc<Mutex<T>>` cũ đã được **thay thế phần lớn** bởi **Actor Model** — xem [Chương 5](05_fp_architecture.md#3-actor-model). Actors chạy trong một `tokio::spawn` task duy nhất, sở hữu toàn bộ state, giao tiếp qua message passing. Zero-lock guarantee.
 
-Bây giờ bạn đã trở thành chuyên gia về **Antigravity SDK (Rust Edition)**. Chúc bạn xây dựng được những AI Agent tuyệt vời nhất!
+## 4. Kiến Trúc Functional Programming (FP)
+
+SDK đã được refactor toàn bộ theo 4 trụ cột FP hiện đại:
+
+### 4.1 Module `src/core/` — Functional Core
+
+Chứa 5 module **pure functions** (không IO, không side effects):
+
+| Module | Chức năng chính |
+|:-------|:---------------|
+| `pipeline.rs` | ROP types: `Pipeline<T>`, `PipelineError` |
+| `agent_core.rs` | `validate_safety()`, `AgentPhase`, `AgentEvent` |
+| `tool_core.rs` | `parse_wire_tool_call()`, `build_denial_result()` |
+| `policy_core.rs` | `bucket_index()`, `matches_tool()`, `build_buckets()` |
+| `step_core.rs` | `merge_usage()`, `add_option()` |
+
+### 4.2 Module `src/actors/` — Actor Model
+
+| Actor | Chức năng | Thay thế |
+|:------|:---------|:---------|
+| `StateActor` | Quản lý tất cả mutable state | 8 trường `Arc<Mutex<...>>` |
+| `WriterActor` | Ghi bytes lên WebSocket | `Arc<Mutex<WsSink>>` |
+
+### 4.3 Event Sourcing
+
+- **AgentPhase**: State machine 5 trạng thái (`Created → Starting → Running → Stopping → Stopped`)
+- **AgentEvent**: Nhật ký sự kiện append-only cho debugging và replay
+
+> Để xem chi tiết đầy đủ, vui lòng đọc [Chương 5: Kiến Trúc FP](05_fp_architecture.md).
 
 ---
 
 ## Tham khảo thêm tổng hợp
 
 - **Toàn bộ mã nguồn mẫu (Examples):** Nằm tại thư mục [`examples/`](../examples/), bao gồm các ví dụ căn bản (`getting_started`) và chuyên sâu (`deep_dives`).
+- **Kiến trúc FP chi tiết:** Xem [Chương 5: Kiến Trúc Functional Programming](05_fp_architecture.md) — bao gồm ROP, FC-IS, Actor Model, Event Sourcing.
 - **Thư mục Skills:** Để xem toàn bộ cấu trúc kiến thức được xây dựng nhằm "dạy" cho các AI Agent khác biết cách sử dụng Rust SDK này, vui lòng tham khảo file [`skills/google-antigravity-sdk/SKILL.md`](../skills/google-antigravity-sdk/SKILL.md) và các thư mục con bên trong nó.
+

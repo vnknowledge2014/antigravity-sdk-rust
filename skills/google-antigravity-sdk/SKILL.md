@@ -55,6 +55,12 @@ relevant information.
 -   If the user needs to monitor costs, track token usage (including thinking
     tokens), or build custom audit logs for advanced monitoring, read
     `references/observability.md`.
+-   If the user needs to understand the Functional Programming architecture
+    (Railway Oriented Programming, Functional Core/Imperative Shell, Actor Model,
+    Event Sourcing), read `references/fp_architecture.md`.
+-   If the user needs to understand the Actor Model concurrency pattern that
+    replaces `Arc<Mutex<...>>` with message-passing actors, read
+    `references/actor_model.md`.
 -   If the user needs to see a list of built-in tools and understand their default state, read `references/built_in_tools.md`.
 
 ### Examples
@@ -92,3 +98,5 @@ relevant information.
     `examples/getting_started/structured_output.md`.
 -   If the user needs to add, configure, or load agent skills into the Google
     Antigravity SDK agent, read `examples/getting_started/agent_skills.md`.
+-   If the user needs to see how pure functions and ROP pipelines are used in
+    the SDK's Functional Core, read `examples/getting_started/fp_pipeline.md`.

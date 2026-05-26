@@ -135,6 +135,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 ```
 
+## Kiến Trúc
+
+SDK tuân theo kiến trúc **Functional Programming (FP)** hiện đại nhất:
+
+- **Railway Oriented Programming (ROP)**: Xử lý lỗi dạng pipeline với `Pipeline<T>` và `PipelineError`
+- **Functional Core – Imperative Shell**: Các hàm thuần túy (pure functions) trong `src/core/`, IO ở biên hệ thống
+- **Actor Model**: Concurrency zero-lock thông qua `StateActor` và `WriterActor` (thay thế `Arc<Mutex<...>>`)
+- **Event Sourcing**: State machine `AgentPhase` + nhật ký sự kiện `AgentEvent` (append-only)
+
+Để xem tài liệu kiến trúc chi tiết, vui lòng tham khảo [Kiến Trúc FP](docs/05_fp_architecture.md).
+
 ## Tính năng
 
 ### Công cụ tùy chỉnh (Custom Tools)
@@ -194,6 +205,7 @@ Kiểm soát hành vi của agent với một hệ thống khai báo chính sác
 - [Khái niệm cốt lõi (Core Concepts)](docs/02_core_concepts.md) — Agent, Conversation, Streaming
 - [Sử dụng nâng cao (Advanced Usage)](docs/03_advanced_usage.md) — Custom Tools, MCP, Policies, Triggers
 - [Kiến trúc (Architecture)](docs/04_architecture.md) — Khám phá cấu trúc bên trong bản Rust
+- [Kiến Trúc FP (FP Architecture)](docs/05_fp_architecture.md) — Railway Oriented Programming, Actor Model, Event Sourcing
 
 ## Giấy phép (License)
 
