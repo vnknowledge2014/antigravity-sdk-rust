@@ -129,6 +129,10 @@ name = "triggers"
 path = "examples/getting_started/triggers.rs"
 
 [[example]]
+name = "fp_pipeline"
+path = "examples/getting_started/fp_pipeline.rs"
+
+[[example]]
 name = "agent_middleware"
 path = "examples/deep_dives/agent_middleware.rs"
 

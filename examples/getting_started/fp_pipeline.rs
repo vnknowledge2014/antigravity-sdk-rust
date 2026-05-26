@@ -19,7 +19,8 @@
 //! All functions shown here are **pure** — no IO, no async, fully deterministic.
 
 use antigravity_sdk::core::{agent_core, pipeline, step_core, tool_core};
-use antigravity_sdk::types::UsageMetadata;
+use antigravity_sdk::types::{BuiltinTools, UsageMetadata};
+use std::collections::HashSet;
 
 fn main() {
     println!("╔══════════════════════════════════════════╗");
@@ -28,48 +29,57 @@ fn main() {
     println!();
 
     // ─────────────────────────────────────────────────────────────
-    // 1. Agent Core: Safety Validation (pure function)
+    // 1. Agent Core: has_write_tools + validate_safety (pure)
     // ─────────────────────────────────────────────────────────────
     println!("── Agent Core: Safety Validation ──");
-    let active_tools = vec!["shell".to_string(), "read_file".to_string()];
-    let has_mcp = false;
-    let policy_count = 1;
-    let has_hooks = true;
+    // has_write_tools: takes &HashSet<BuiltinTools> — read-only tools
+    let read_only: HashSet<BuiltinTools> = [BuiltinTools::ListDir, BuiltinTools::ViewFile]
+        .into_iter()
+        .collect();
+    println!("  Read-only set has_write_tools: {}", agent_core::has_write_tools(&read_only));
 
-    match agent_core::validate_safety(&active_tools, has_mcp, policy_count, has_hooks) {
-        Ok(()) => println!("  ✅ Safety check passed"),
-        Err(e) => println!("  ❌ Safety check failed: {}", e),
+    // Write-capable tools
+    let with_writes: HashSet<BuiltinTools> = [BuiltinTools::RunCommand, BuiltinTools::EditFile]
+        .into_iter()
+        .collect();
+    println!("  RunCommand+EditFile has_write_tools: {}", agent_core::has_write_tools(&with_writes));
+
+    // validate_safety with policy — Ok
+    match agent_core::validate_safety(&with_writes, false, 1, false) {
+        Ok(v) => println!("  ✅ Safety ok (has_write_tools={})", v.has_write_tools),
+        Err(e) => println!("  ❌ Safety fail: {}", e),
     }
-
-    let has_writes = agent_core::has_write_tools(&active_tools);
-    println!("  Has write tools: {}", has_writes);
+    // validate_safety without policy for write tools — Err expected
+    match agent_core::validate_safety(&with_writes, false, 0, false) {
+        Ok(_) => println!("  (unexpected ok)"),
+        Err(e) => println!("  Expected deny (no policy): {}", e),
+    }
     println!();
 
     // ─────────────────────────────────────────────────────────────
     // 2. Tool Core: Parse Wire Tool Call (pure function)
     // ─────────────────────────────────────────────────────────────
     println!("── Tool Core: Parse Wire Tool Call ──");
+    // API: Option<String> for each arg
     let tc = tool_core::parse_wire_tool_call(
-        "call-123".to_string(),
-        "get_weather".to_string(),
-        r#"{"city": "Tokyo"}"#.to_string(),
+        Some("call-123".to_string()),
+        Some("get_weather".to_string()),
+        Some(r#"{"city": "Tokyo"}"#.to_string()),
     );
-    match tc {
-        Ok(tc) => println!("  ✅ Parsed: {} (id={})", tc.name, tc.id),
+    match &tc {
+        Ok(tc) => println!("  ✅ Parsed: {:?} (id={:?})", tc.name, tc.id),
         Err(e) => println!("  ❌ Parse failed: {}", e),
     }
 
-    // Denial result
-    println!();
-    println!("── Tool Core: Build Denial Result ──");
-    let tc2 = tool_core::parse_wire_tool_call(
-        "call-456".to_string(),
-        "delete_all".to_string(),
-        "{}".to_string(),
-    )
-    .unwrap();
-    let denial = tool_core::build_denial_result(&tc2, "Policy denied: destructive operation");
-    println!("  Denial for tool '{}': error = {:?}", tc2.name, denial.error);
+    // Build a denial result (pure function)
+    if let Ok(ref tc2) = tool_core::parse_wire_tool_call(
+        Some("call-456".to_string()),
+        Some("delete_all".to_string()),
+        None,
+    ) {
+        let denial = tool_core::build_denial_result(tc2, "Policy denied: destructive operation");
+        println!("  Denial error: {:?}", denial.error);
+    }
     println!();
 
     // ─────────────────────────────────────────────────────────────
@@ -89,13 +99,13 @@ fn main() {
         ..Default::default()
     };
     let merged = step_core::merge_usage(Some(&usage1), &usage2);
-    println!("  Turn 1: prompt={:?}, total={:?}", usage1.prompt_token_count, usage1.total_token_count);
-    println!("  Turn 2: prompt={:?}, total={:?}", usage2.prompt_token_count, usage2.total_token_count);
-    println!("  Merged: prompt={:?}, total={:?}", merged.prompt_token_count, merged.total_token_count);
+    println!("  Turn 1 total: {:?}", usage1.total_token_count);
+    println!("  Turn 2 total: {:?}", usage2.total_token_count);
+    println!("  Merged total: {:?}", merged.total_token_count); // Some(430)
     println!();
 
     // ─────────────────────────────────────────────────────────────
-    // 4. Agent Core: Phase State Machine (pure enum)
+    // 4. Agent Core: Phase State Machine (pure enum, PartialEq)
     // ─────────────────────────────────────────────────────────────
     println!("── Agent Core: Phase State Machine ──");
     let phases = [
@@ -106,27 +116,40 @@ fn main() {
         agent_core::AgentPhase::Stopped,
     ];
     for phase in &phases {
-        let marker = if *phase == agent_core::AgentPhase::Running { "◀ active" } else { "" };
-        println!("  {:?} {}", phase, marker);
+        let marker = if *phase == agent_core::AgentPhase::Running { " ◀ active" } else { "" };
+        println!("  {:?}{}", phase, marker);
     }
     println!();
 
     // ─────────────────────────────────────────────────────────────
-    // 5. Pipeline: ROP Error Handling (pure types)
+    // 5. Pipeline: ROP Error Variants (pure types)
     // ─────────────────────────────────────────────────────────────
-    println!("── Pipeline: ROP Error Handling ──");
-    let err1 = pipeline::PipelineError::validation("Missing API key");
-    println!("  Error 1: stage={:?}, msg=\"{}\"", err1.stage, err1.message);
+    println!("── Pipeline: ROP Error Variants ──");
+    let e1 = pipeline::PipelineError::ValidationError("Missing API key".into());
+    println!("  ValidationError: {}", e1);
 
-    let err2 = pipeline::PipelineError::connection("WebSocket timeout");
-    println!("  Error 2: stage={:?}, msg=\"{}\"", err2.stage, err2.message);
+    let e2 = pipeline::PipelineError::Denied {
+        message: "policy denied shell tool".into(),
+        tool_call: None,
+    };
+    println!("  Denied: {}", e2);
 
-    let err3 = pipeline::PipelineError::tool_execution("Tool 'shell' returned exit code 1");
-    println!("  Error 3: stage={:?}, msg=\"{}\"", err3.stage, err3.message);
+    let e3 = pipeline::PipelineError::ToolError {
+        name: "shell".into(),
+        error: "exit code 1".into(),
+        recovery: None,
+    };
+    println!("  ToolError: {}", e3);
+
+    // Pipeline chaining (ROP pattern)
+    let result: pipeline::Pipeline<i32> = Ok(10)
+        .and_then(|x| Ok(x * 2))
+        .and_then(|x| Ok(x + 5));
+    println!("  Pipeline(10 * 2 + 5): {:?}", result);
     println!();
 
     // ─────────────────────────────────────────────────────────────
-    // 6. Agent Events (append-only log)
+    // 6. Agent Events (event sourcing — append-only log types)
     // ─────────────────────────────────────────────────────────────
     println!("── Agent Core: Event Sourcing ──");
     let events = vec![
