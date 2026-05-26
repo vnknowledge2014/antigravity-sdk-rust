@@ -51,3 +51,20 @@ interaction:
 This structure allows the user to interact with a simple, high-level `Agent`
 interface while the `Conversation` and `Connection` handle the state management
 and transport details under the hood.
+
+## Extended Architecture: Functional Programming (FP)
+
+The SDK has been refactored with a SOTA Functional Programming architecture on top of the 3-layer model. For full details, see `references/fp_architecture.md` and `references/actor_model.md`.
+
+### Summary
+
+| Pillar | Location | What it replaces |
+|:-------|:---------|:-----------------|
+| **ROP** (Railway Oriented Programming) | `src/core/pipeline.rs` | Nested if-let chains |
+| **Functional Core – Imperative Shell** | `src/core/` (5 modules) | Logic mixed with IO |
+| **Actor Model** | `src/actors/` | 8× `Arc<Mutex<...>>` |
+| **Event Sourcing** | `src/core/agent_core.rs` | `started: bool` flag |
+
+Key new public API on `Agent`:
+- `agent.phase()` → `&AgentPhase` — current lifecycle phase
+- `agent.events()` → `&[AgentEvent]` — append-only event log
